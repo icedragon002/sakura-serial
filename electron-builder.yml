@@ -1,0 +1,38 @@
+appId: com.sakura.serial
+productName: Sakura Serial
+directories:
+  buildResources: resources
+  output: dist
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.*'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+win:
+  executableName: sakura-serial
+  target:
+    - nsis
+  icon: resources/icon.ico
+  sign: null
+  signAndEditExecutable: false
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: Sakura Serial
+  uninstallDisplayName: Sakura Serial
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  target:
+    - dmg
+  icon: resources/icon.icns
+linux:
+  target:
+    - AppImage
+    - deb
+  maintainer: sakura-serial
+  category: Development
+  icon: resources/icon.png
