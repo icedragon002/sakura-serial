@@ -3,11 +3,14 @@ name: Build & Release
 on:
   push:
     tags:
-      - 'v*'           # v1.0.0, v1.1.0 etc
-  workflow_dispatch:    # allow manual trigger from Actions tab
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: write
 
 jobs:
-  release:
+  build:
     strategy:
       fail-fast: false
       matrix:
@@ -26,9 +29,7 @@ jobs:
         run: npm ci
 
       - name: Build & Package
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npm run package
+        run: npm run package:ci
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -42,12 +43,13 @@ jobs:
           if-no-files-found: ignore
 
   publish:
-    needs: release
+    needs: build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
+          merge-multiple: true
 
       - name: Display structure
         run: ls -R artifacts/
@@ -70,12 +72,6 @@ jobs:
             | 🐧 Linux | `sakura-serial-*.AppImage` / `.deb` |
 
             > Run the installer to upgrade. Previous settings are preserved.
-          files: |
-            artifacts/windows-latest/*.exe
-            artifacts/macos-latest/*.dmg
-            artifacts/ubuntu-latest/*.AppImage
-            artifacts/ubuntu-latest/*.deb
+          files: artifacts/*
           draft: false
           prerelease: false
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
