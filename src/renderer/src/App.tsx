@@ -22,10 +22,19 @@ import OneWirePanel from './components/OneWirePanel'
 import GPIOPanel from './components/GPIOPanel'
 import LAPanel from './components/LAPanel'
 import ScriptPanel from './components/ScriptPanel'
+import DashboardPanel from './components/DashboardPanel'
 import SakuraParticles from './components/SakuraParticles'
 import Mascot from './components/Mascot'
 import SettingsButton from './components/SettingsButton'
 import type { Theme } from './components/SettingsButton'
+import {
+  isRecording,
+  startRecording,
+  stopRecording,
+  generateScript,
+  recordStep,
+  type MacroRecording,
+} from './macro-recorder'
 
 /* ── Tabs ─────────────────────────────────────────── */
 type PanelTab =
@@ -37,15 +46,17 @@ type PanelTab =
   | 'gpio'
   | 'la'
   | 'script'
+  | 'dashboard'
 
 const TABS: { key: PanelTab; label: string; icon: string }[] = [
+  { key: 'dashboard', label: 'Dash', icon: '📊' },
   { key: 'i2c', label: 'I²C', icon: '🔌' },
   { key: 'spi', label: 'SPI', icon: '⚡' },
   { key: 'uart', label: 'UART', icon: '📡' },
   { key: 'can', label: 'CAN', icon: '🚗' },
   { key: 'onewire', label: '1-Wire', icon: '🌡' },
   { key: 'gpio', label: 'GPIO', icon: '🔌' },
-  { key: 'la', label: 'LA', icon: '📊' },
+  { key: 'la', label: 'LA', icon: '📈' },
   { key: 'script', label: 'Script', icon: '📜' },
 ]
 
@@ -106,7 +117,9 @@ export default function App() {
   const [rxCount, setRxCount] = useState(0)
 
   /* ── Active Panel ── */
-  const [activeTab, setActiveTab] = useState<PanelTab>('i2c')
+  const [activeTab, setActiveTab] = useState<PanelTab>('dashboard')
+  const [connectedAt, setConnectedAt] = useState<number | undefined>()
+  const [macroRecording, setMacroRecording] = useState<MacroRecording | null>(null)
 
   /* ── UI State ── */
   const [theme, setTheme] = useState<Theme>(() => loadStr('sakura-theme', 'sakura') as Theme)
@@ -246,7 +259,7 @@ export default function App() {
         filename = `probe-station-log-${ts}.json`
       }
 
-      const blob = new Blob([content], { type: 'text/plain' })
+      const blob = new Blob([content], { type: format === 'csv' ? 'text/csv' : 'application/json' })
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
       a.href = url
@@ -262,6 +275,7 @@ export default function App() {
     async (config: TransportConfig) => {
       await window.deviceApi.connect(config)
       setIsConnected(true)
+      setConnectedAt(Date.now())
 
       // Try to get device info
       try {
@@ -298,6 +312,7 @@ export default function App() {
     await window.deviceApi.disconnect()
     setIsConnected(false)
     setDeviceName('')
+    setConnectedAt(undefined)
     addEntry({
       timestamp: Date.now(),
       direction: 'rx',
@@ -409,6 +424,16 @@ export default function App() {
             {activeTab === 'script' && (
               <ScriptPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
             )}
+            {activeTab === 'dashboard' && (
+              <DashboardPanel
+                isConnected={isConnected}
+                deviceInfo={deviceInfo}
+                txCount={txCount}
+                rxCount={rxCount}
+                entryCount={entries.length}
+                connectedAt={connectedAt}
+              />
+            )}
           </div>
 
           {/* Transaction Log */}
@@ -435,6 +460,42 @@ export default function App() {
         <span className="status-bar__spacer" />
         <span className="status-bar__stat">TX: {txCount}</span>
         <span className="status-bar__stat">RX: {rxCount}</span>
+        {macroRecording && (
+          <span className="status-bar__stat" style={{ color: 'var(--accent)' }}>
+            ⏺ REC {macroRecording.steps.length} steps
+          </span>
+        )}
+        {isConnected && (
+          <button
+            className="status-bar__record-btn"
+            onClick={() => {
+              if (isRecording()) {
+                const rec = stopRecording()
+                if (rec && rec.steps.length > 0) {
+                  setMacroRecording(rec)
+                  const code = generateScript(rec)
+                  navigator.clipboard.writeText(code).catch(() => {})
+                  setActiveTab('script')
+                }
+              } else {
+                startRecording()
+                setMacroRecording(null)
+              }
+            }}
+            style={{
+              marginLeft: 8,
+              padding: '2px 8px',
+              fontSize: 11,
+              background: isRecording() ? 'var(--accent)' : 'transparent',
+              color: isRecording() ? '#fff' : 'var(--text-muted)',
+              border: '1px solid ' + (isRecording() ? 'var(--accent)' : 'var(--border-color)'),
+              borderRadius: 'var(--radius-sm)',
+              cursor: 'pointer',
+            }}
+          >
+            {isRecording() ? '⏹ Stop' : '⏺ Record'}
+          </button>
+        )}
       </div>
 
       {/* Mascot */}

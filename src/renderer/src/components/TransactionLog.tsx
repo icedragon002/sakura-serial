@@ -1,4 +1,5 @@
 import { useRef, useEffect, useCallback } from 'react'
+import { useT } from '../i18n/I18nContext'
 
 export interface TransactionEntry {
   id: number
@@ -37,6 +38,7 @@ export default function TransactionLog({
   onClear,
   onExport,
 }: Props) {
+  const { t } = useT()
   const containerRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {

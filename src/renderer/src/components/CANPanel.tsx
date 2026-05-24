@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { CMD_CAN_CFG, CMD_CAN_SEND, CMD_CAN_FILTER, CMD_CAN_MONITOR, EVENT_CAN_FRAME_RX } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -20,6 +21,7 @@ interface CanFrame {
 const BITRATES = [125_000, 250_000, 500_000, 1_000_000, 2_000_000, 4_000_000, 8_000_000]
 
 export default function CANPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [mode, setMode] = useState(0) // 0=Normal, 1=ListenOnly
   const [bitrate, setBitrate] = useState(500_000)
   const [fd, setFd] = useState(0)
@@ -146,7 +148,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">🚗</span>
-        <span className="pp-title">CAN</span>
+        <span className="pp-title">{t('can.title')}</span>
       </div>
 
       {/* Config Row */}

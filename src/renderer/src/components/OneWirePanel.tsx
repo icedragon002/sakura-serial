@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { CMD_OW_RESET, CMD_OW_SEARCH, CMD_OW_READ, CMD_OW_WRITE } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -10,6 +11,7 @@ interface Props {
 }
 
 export default function OneWirePanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [rom, setRom] = useState('')
   const [owCmd, setOwCmd] = useState('')
   const [readLen, setReadLen] = useState(8)
@@ -126,7 +128,7 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">🌡</span>
-        <span className="pp-title">1-Wire</span>
+        <span className="pp-title">{t('ow.title')}</span>
       </div>
 
       {/* Reset + Search */}

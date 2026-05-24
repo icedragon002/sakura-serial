@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { CMD_UART_CFG, CMD_UART_WRITE, CMD_UART_READ, CMD_UART_BREAK } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -17,6 +18,7 @@ const PARITIES = ['none', 'even', 'odd', 'mark', 'space'] as const
 const HISTORY_MAX = 50
 
 export default function UARTPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [port, setPort] = useState(0)
   const [baud, setBaud] = useState(115200)
   const [dataBits, setDataBits] = useState(8)
@@ -156,7 +158,7 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">📡</span>
-        <span className="pp-title">UART</span>
+        <span className="pp-title">{t('uart.title')}</span>
       </div>
 
       {/* Config Row */}

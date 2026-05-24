@@ -1,6 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import type { DeviceInfo, TransportConfig } from '../../../shared/transport'
+import { Session } from '../../../shared/transport'
 import { BleTransport } from '../ble-transport'
+import { useT } from '../i18n/I18nContext'
+
+let bleSession: Session | null = null
 
 interface Props {
   isConnected: boolean
@@ -21,6 +25,7 @@ export default function ConnectionManager({
   onConnect,
   onDisconnect,
 }: Props) {
+  const { t } = useT()
   const [devices, setDevices] = useState<DeviceInfo[]>([])
   const [selectedPath, setSelectedPath] = useState('')
   const [connType, setConnType] = useState<'usb' | 'wifi' | 'ble'>('usb')
@@ -46,16 +51,21 @@ export default function ConnectionManager({
     setConnecting(true)
     try {
       if (connType === 'ble') {
-        // BLE handled directly in renderer via Web Bluetooth
+        // BLE handled in renderer via Web Bluetooth + local Session
         try {
           const transport = new BleTransport()
-          await transport.open({ type: 'ble', path: '' })
-          // For now, BLE just opens the transport — full Session integration TBD
-          await transport.close()
+          bleSession = new Session(transport, {
+            timeout: 2000,
+            maxRetries: 2,
+            pingInterval: 5000,
+          })
+          await bleSession.open({ type: 'ble', path: '' })
+          // Use onConnect to notify App about the connection
+          await onConnect({ type: 'ble', path: 'ble://device' })
         } catch (err: any) {
           console.error('BLE connection failed:', err)
+          setConnecting(false)
         }
-        setConnecting(false)
         return
       }
 
@@ -80,7 +90,7 @@ export default function ConnectionManager({
       <div className="cm-header">
         <div className={`cm-status ${isConnected ? 'cm-status--connected' : ''}`} />
         <span className="cm-title">
-          {isConnected ? deviceName || 'Connected' : 'Disconnected'}
+          {isConnected ? deviceName || t('conn.connected') : t('conn.disconnected')}
         </span>
       </div>
 
@@ -112,8 +122,7 @@ export default function ConnectionManager({
             <div className="cm-section">
               <div className="cm-label">Web Bluetooth</div>
               <p style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.5 }}>
-                Opens browser Bluetooth picker to scan for nearby probe-station devices.
-                Make sure your device is advertising as "ProtoDebug".
+                {t('conn.bleHint')}
               </p>
             </div>
           ) : connType === 'usb' ? (
@@ -125,7 +134,7 @@ export default function ConnectionManager({
                   value={selectedPath}
                   onChange={(e) => setSelectedPath(e.target.value)}
                 >
-                  <option value="">— Select port —</option>
+                  <option value="">{t('conn.selectPort')}</option>
                   {devices
                     .filter((d) => d.type === 'usb')
                     .map((d) => (
@@ -135,18 +144,18 @@ export default function ConnectionManager({
                     ))}
                 </select>
                 <button className="cm-refresh" onClick={refreshDevices}>
-                  ↻ Refresh
+                  ↻ {t('conn.refresh')}
                 </button>
               </div>
             </>
           ) : (
             <div className="cm-section">
-              <div className="cm-label">Host:Port</div>
+              <div className="cm-label">{t('conn.hostPort')}</div>
               <input
                 className="cm-input"
                 value={wifiHost}
                 onChange={(e) => setWifiHost(e.target.value)}
-                placeholder="192.168.1.100:7777"
+                placeholder={t('conn.hostPlaceholder')}
                 spellCheck={false}
               />
             </div>
@@ -157,14 +166,14 @@ export default function ConnectionManager({
             onClick={handleConnect}
             disabled={connecting || (connType === 'usb' ? !selectedPath : connType === 'ble' ? false : !wifiHost)}
           >
-            {connecting ? 'Connecting…' : 'Connect'}
+            {connecting ? t('conn.connecting') : t('conn.connect')}
           </button>
         </>
       )}
 
       {isConnected && (
         <button className="cm-disconnect-btn" onClick={handleDisconnect}>
-          Disconnect
+          {t('conn.disconnect')}
         </button>
       )}
 
@@ -172,19 +181,19 @@ export default function ConnectionManager({
       {isConnected && (
         <div className="cm-info">
           <div className="cm-info-row">
-            <span>Transport</span>
+            <span>{t('conn.transport')}</span>
             <span>{deviceInfo?.transportType ?? 'USB CDC'}</span>
           </div>
           {deviceInfo?.firmwareVersion && (
             <div className="cm-info-row">
-              <span>Firmware</span>
+              <span>{t('conn.firmware')}</span>
               <span>{deviceInfo.firmwareVersion}</span>
             </div>
           )}
           {deviceInfo?.supportedProtocols && deviceInfo.supportedProtocols.length > 0 && (
             <div className="cm-info-row">
-              <span>Protocols</span>
-              <span>{deviceInfo.supportedProtocols.length} supported</span>
+              <span>{t('conn.protocols')}</span>
+              <span>{t('conn.supported', { n: String(deviceInfo.supportedProtocols.length) })}</span>
             </div>
           )}
         </div>

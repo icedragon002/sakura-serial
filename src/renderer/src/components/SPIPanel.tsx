@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { CMD_SPI_TRANSFER, CMD_SPI_CS_CTRL } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -20,6 +21,7 @@ const SPEEDS = [100, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]
 // stored as kHz; sent as 100kHz units per spec
 
 export default function SPIPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [bus, setBus] = useState(0)
   const [mode, setMode] = useState(0)
   const [speedKHz, setSpeedKHz] = useState(1000)
@@ -85,7 +87,7 @@ export default function SPIPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">⚡</span>
-        <span className="pp-title">SPI</span>
+        <span className="pp-title">{t('spi.title')}</span>
       </div>
 
       {/* Config Row 1 */}

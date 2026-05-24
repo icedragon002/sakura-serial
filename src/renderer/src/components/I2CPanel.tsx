@@ -7,6 +7,7 @@ import {
   COMMAND_NAMES,
   ERROR_NAMES,
 } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -33,6 +34,7 @@ const KNOWN_DEVICES: Record<number, string> = {
 }
 
 export default function I2CPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [channel, setChannel] = useState(0)
   const [speed, setSpeed] = useState(400_000)
   const [deviceAddr, setDeviceAddr] = useState('0x68')
@@ -147,7 +149,7 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">🔌</span>
-        <span className="pp-title">I2C</span>
+        <span className="pp-title">{t('i2c.title')}</span>
       </div>
 
       {/* Config Row */}

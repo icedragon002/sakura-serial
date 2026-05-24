@@ -16,6 +16,8 @@ import { Session } from '../shared/transport'
 import type { TransportConfig, DeviceInfo } from '../shared/transport'
 import { UsbTransport, listUsbDevices } from './usb-transport'
 import { TcpTransport } from './tcp-transport'
+import { scanMdnsDevices, type MdnsDevice } from './mdns-discovery'
+import { autoUpdater } from 'electron-updater'
 
 let mainWindow: BrowserWindow | null = null
 let session: Session | null = null
@@ -69,6 +71,15 @@ app.whenReady().then(() => {
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
+
+  // Auto-update (only in production builds)
+  if (!is.dev) {
+    autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+    // Check every 6 hours
+    setInterval(() => {
+      autoUpdater.checkForUpdatesAndNotify().catch(() => {})
+    }, 6 * 60 * 60 * 1000)
+  }
 })
 
 app.on('window-all-closed', () => {
@@ -119,9 +130,21 @@ function registerIpcHandlers(): void {
       console.error('Failed to list USB devices:', err)
     }
 
-    // WiFi — scan available via TCP connect test (simplified)
-    // Full WiFi scanning would require mDNS/Bonjour; for now,
-    // user can manually enter IP in the connection UI.
+    // WiFi — mDNS/Bonjour scan
+    try {
+      const mdnsDevices = await scanMdnsDevices(3000)
+      for (const d of mdnsDevices) {
+        devices.push({
+          id: `wifi:${d.host}:${d.port}`,
+          type: 'wifi',
+          name: d.name || `probe-station @ ${d.host}`,
+          path: `${d.host}:${d.port}`,
+          detail: `${d.host}:${d.port}`,
+        })
+      }
+    } catch (err) {
+      console.error('Failed to scan mDNS devices:', err)
+    }
 
     // BLE — not yet implemented (requires Web Bluetooth or node-ble)
 

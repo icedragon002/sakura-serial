@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { CMD_GPIO_CFG, CMD_GPIO_WRITE, CMD_GPIO_READ, CMD_GPIO_PWM } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -16,6 +17,7 @@ const MODE_MAP: Record<GpioMode, number> = { in: 0, out: 1, pwm: 2, freq: 3 }
 const PULL_MAP: Record<GpioPull, number> = { none: 0, up: 1, down: 2 }
 
 export default function GPIOPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [pin, setPin] = useState(0)
   const [mode, setMode] = useState<GpioMode>('out')
   const [pull, setPull] = useState<GpioPull>('none')
@@ -93,7 +95,7 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">🔌</span>
-        <span className="pp-title">GPIO</span>
+        <span className="pp-title">{t('gpio.title')}</span>
       </div>
 
       {/* Pin + Mode + Pull + Config */}

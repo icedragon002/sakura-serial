@@ -1,5 +1,8 @@
 import { useState, useCallback } from 'react'
-import { CMD_LA_CFG, CMD_LA_START, CMD_LA_STOP, CMD_LA_STATUS, CMD_LA_STREAM_MODE } from '../../../shared/commands'
+import { CMD_LA_CFG, CMD_LA_START, CMD_LA_STOP, CMD_LA_STATUS, CMD_LA_STREAM_MODE, CMD_LA_DATA } from '../../../shared/commands'
+import { useT } from '../i18n/I18nContext'
+import WaveformViewer, { type WaveformChannel } from './WaveformViewer'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -19,6 +22,7 @@ const VREFS = [
 type LaStatus = 'idle' | 'armed' | 'triggered' | 'done'
 
 export default function LAPanel({ isConnected, onTransaction }: Props) {
+  const { t } = useT()
   const [channels, setChannels] = useState(0xff) // bitmask
   const [sampleRateKHz, setSampleRateKHz] = useState(1000)
   const [vref, setVref] = useState(1) // 3.3V
@@ -29,6 +33,8 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
   const [streamMode, setStreamMode] = useState(0)
   const [status, setStatus] = useState<LaStatus>('idle')
   const [busy, setBusy] = useState(false)
+  const [capturedChannels, setCapturedChannels] = useState<WaveformChannel[]>([])
+  const [triggerSample, setTriggerSample] = useState<number | undefined>()
 
   const addTx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'LA', summary: s, data: d })
@@ -53,6 +59,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
       await window.deviceApi.sendCommand(CMD_LA_CFG, Array.from(payload))
       addRx('CFG OK', '')
       setStatus('armed')
+      recordStep('LA', 'config', { channels, rate: sampleRateKHz })
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
     } finally {
@@ -120,7 +127,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
     <div className="protocol-panel">
       <div className="pp-header">
         <span className="pp-icon">📊</span>
-        <span className="pp-title">Logic Analyzer</span>
+        <span className="pp-title">{t('la.title')}</span>
       </div>
 
       {/* Channel Selection */}
@@ -208,13 +215,26 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
         </span>
       </div>
 
+      {/* Waveform Viewer */}
+      {capturedChannels.length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <WaveformViewer
+            channels={capturedChannels}
+            sampleRateKHz={sampleRateKHz}
+            triggerSample={triggerSample}
+          />
+        </div>
+      )}
+
       {/* Note */}
-      <div className="pp-placeholder" style={{ padding: '20px', textAlign: 'left' }}>
-        <p>Configure channels, sample rate, and trigger conditions, then start capture.</p>
-        <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
-          Buffer mode: up to 32K samples/ch · Stream mode: real-time via USB/WiFi
-        </p>
-      </div>
+      {capturedChannels.length === 0 && (
+        <div className="pp-placeholder" style={{ padding: '20px', textAlign: 'left' }}>
+          <p>{t('la.noData')}</p>
+          <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+            {t('la.streamHint')}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
