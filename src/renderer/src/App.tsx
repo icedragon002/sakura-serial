@@ -23,6 +23,7 @@ import GPIOPanel from './components/GPIOPanel'
 import LAPanel from './components/LAPanel'
 import ScriptPanel from './components/ScriptPanel'
 import DashboardPanel from './components/DashboardPanel'
+import BLEPanel from './components/BLEPanel'
 import ErrorBoundary from './components/ErrorBoundary'
 import SakuraParticles from './components/SakuraParticles'
 import Mascot from './components/Mascot'
@@ -48,6 +49,7 @@ type PanelTab =
   | 'la'
   | 'script'
   | 'dashboard'
+  | 'ble'
 
 const TABS: { key: PanelTab; label: string; icon: string }[] = [
   { key: 'dashboard', label: 'Dash', icon: '📊' },
@@ -58,6 +60,7 @@ const TABS: { key: PanelTab; label: string; icon: string }[] = [
   { key: 'onewire', label: '1-Wire', icon: '🌡' },
   { key: 'gpio', label: 'GPIO', icon: '🔌' },
   { key: 'la', label: 'LA', icon: '📈' },
+  { key: 'ble', label: 'BLE', icon: '📶' },
   { key: 'script', label: 'Script', icon: '📜' },
 ]
 
@@ -508,6 +511,11 @@ export default function App() {
                   entryCount={entries.length}
                   connectedAt={connectedAt}
                 />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="BLE Panel crashed">
+              {activeTab === 'ble' && (
+                <BLEPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
               )}
             </ErrorBoundary>
           </div>
