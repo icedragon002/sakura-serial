@@ -108,6 +108,8 @@ export default function App() {
     firmwareVersion: string
     supportedProtocols: number[]
     transportType: string
+    vrefChannels?: Record<number, number>
+    sramUsage?: number
   } | null>(null)
 
   /* ── Transaction Log ── */
@@ -332,6 +334,8 @@ export default function App() {
           firmwareVersion: info.firmwareVersion || 'unknown',
           supportedProtocols: info.supportedProtocols || [],
           transportType: config.type.toUpperCase(),
+          vrefChannels: info.vrefChannels || {},
+          sramUsage: info.sramUsage || 0,
         })
         addEntry({
           timestamp: Date.now(),
@@ -342,7 +346,7 @@ export default function App() {
         })
       } catch {
         setDeviceName('probe-station')
-        setDeviceInfo({ firmwareVersion: 'unknown', supportedProtocols: [], transportType: config.type.toUpperCase() })
+        setDeviceInfo({ firmwareVersion: 'unknown', supportedProtocols: [], transportType: config.type.toUpperCase(), vrefChannels: {}, sramUsage: 0 })
         addEntry({
           timestamp: Date.now(),
           direction: 'rx',

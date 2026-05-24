@@ -34,6 +34,7 @@ export default function ConnectionManager({
   const [selectedPath, setSelectedPath] = useState('')
   const [connType, setConnType] = useState<'usb' | 'wifi' | 'ble'>('usb')
   const [wifiHost, setWifiHost] = useState('')
+  const [wifiPort, setWifiPort] = useState('7777')
   const [connecting, setConnecting] = useState(false)
 
   const refreshDevices = useCallback(async () => {
@@ -76,7 +77,7 @@ export default function ConnectionManager({
       const config: TransportConfig =
         connType === 'usb'
           ? { type: 'usb', path: selectedPath }
-          : { type: 'wifi', path: wifiHost, host: wifiHost }
+          : { type: 'wifi', path: `${wifiHost}:${wifiPort}`, host: wifiHost, port: parseInt(wifiPort) || 7777 }
       await onConnect(config)
     } catch (err: any) {
       console.error('Connection failed:', err)
@@ -155,13 +156,24 @@ export default function ConnectionManager({
           ) : (
             <div className="cm-section">
               <div className="cm-label">{t('conn.hostPort')}</div>
-              <input
-                className="cm-input"
-                value={wifiHost}
-                onChange={(e) => setWifiHost(e.target.value)}
-                placeholder={t('conn.hostPlaceholder')}
-                spellCheck={false}
-              />
+              <div style={{ display: 'flex', gap: 4 }}>
+                <input
+                  className="cm-input"
+                  value={wifiHost}
+                  onChange={(e) => setWifiHost(e.target.value)}
+                  placeholder="192.168.1.100"
+                  style={{ flex: 1 }}
+                  spellCheck={false}
+                />
+                <input
+                  className="cm-input"
+                  value={wifiPort}
+                  onChange={(e) => setWifiPort(e.target.value.replace(/\D/g, ''))}
+                  placeholder="7777"
+                  style={{ width: 70 }}
+                  spellCheck={false}
+                />
+              </div>
             </div>
           )}
 

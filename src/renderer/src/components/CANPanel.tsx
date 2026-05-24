@@ -58,7 +58,8 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
   const handleConfig = useCallback(async () => {
     if (!isConnected) return
     setBusy(true)
-    const modeName = mode === 0 ? 'Normal' : 'ListenOnly'
+    const modeNames = ['Normal', 'ListenOnly', 'Loopback']
+    const modeName = modeNames[mode] || 'Unknown'
     addTx(`CFG ${modeName} ${bitrate / 1000}kbps FD=${fd ? `${fdBitrate / 1000}kbps` : 'OFF'} Term=${termination ? '120Ω' : 'OFF'}`, '')
     try {
       const payload = new Uint8Array([
@@ -171,6 +172,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
           <select value={mode} onChange={(e) => setMode(Number(e.target.value))}>
             <option value={0}>Normal</option>
             <option value={1}>Listen Only</option>
+            <option value={2}>Loopback</option>
           </select>
         </div>
         <div className="pp-field">

@@ -14,6 +14,8 @@ interface Props {
     firmwareVersion: string
     supportedProtocols: number[]
     transportType: string
+    vrefChannels?: Record<number, number>
+    sramUsage?: number
   } | null
   txCount: number
   rxCount: number
@@ -154,6 +156,25 @@ export default function DashboardPanel({
               </div>
             </div>
           )}
+
+          {/* VRef & SRAM Card */}
+          {(deviceInfo?.vrefChannels && Object.keys(deviceInfo.vrefChannels).length > 0) || (deviceInfo?.sramUsage && deviceInfo.sramUsage > 0) ? (
+            <div style={cardStyle}>
+              <div style={cardTitleStyle}>Hardware</div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, fontSize: 11, fontFamily: 'var(--font-mono)' }}>
+                {deviceInfo.vrefChannels && Object.keys(deviceInfo.vrefChannels).length > 0 && (
+                  <span style={{ color: 'var(--text-dim)' }}>
+                    VRef: {Object.entries(deviceInfo.vrefChannels).map(([ch, mV]) => `CH${ch}=${(mV / 1000).toFixed(1)}V`).join(', ')}
+                  </span>
+                )}
+                {deviceInfo.sramUsage && deviceInfo.sramUsage > 0 && (
+                  <span style={{ color: 'var(--text-dim)' }}>
+                    SRAM: {deviceInfo.sramUsage}KB
+                  </span>
+                )}
+              </div>
+            </div>
+          ) : null}
         </>
       )}
     </div>

@@ -12,10 +12,10 @@ interface Props {
 }
 
 const SPI_MODES = [
-  { value: 0, label: 'Mode 0 (CPOL=0,CPHA=0)' },
-  { value: 1, label: 'Mode 1 (CPOL=0,CPHA=1)' },
-  { value: 2, label: 'Mode 2 (CPOL=1,CPHA=0)' },
-  { value: 3, label: 'Mode 3 (CPOL=1,CPHA=1)' },
+  { value: 0, label: 'Mode 0 (CPOL=0,CPHA=0)', hint: 'Clock idle LOW, sample on leading ↑ edge' },
+  { value: 1, label: 'Mode 1 (CPOL=0,CPHA=1)', hint: 'Clock idle LOW, sample on trailing ↓ edge' },
+  { value: 2, label: 'Mode 2 (CPOL=1,CPHA=0)', hint: 'Clock idle HIGH, sample on leading ↓ edge' },
+  { value: 3, label: 'Mode 3 (CPOL=1,CPHA=1)', hint: 'Clock idle HIGH, sample on trailing ↑ edge' },
 ]
 
 const SPEEDS = [100, 250, 500, 1000, 2000, 5000, 10000, 20000, 50000]
@@ -104,7 +104,7 @@ export default function SPIPanel({ isConnected, onTransaction }: Props) {
         <div className="pp-field">
           <label>Mode</label>
           <select value={mode} onChange={(e) => setMode(Number(e.target.value))}>
-            {SPI_MODES.map((m) => <option key={m.value} value={m.value}>{m.label}</option>)}
+            {SPI_MODES.map((m) => <option key={m.value} value={m.value} title={m.hint}>{m.label}</option>)}
           </select>
         </div>
         <div className="pp-field">
