@@ -169,8 +169,11 @@ function registerIpcHandlers(): void {
         transport = new TcpTransport()
         break
       case 'ble':
-        /* BLE handled in renderer process (requires Web Bluetooth API) */
-        throw new Error('BLE connections must be initiated from the renderer process')
+        // BLE transport runs in renderer (Web Bluetooth). Main process
+        // acknowledges the connection; commands are proxied from renderer.
+        session = null // BLE session lives in renderer
+        notifyStatus('connected')
+        return // no need to create transport here
       default:
         throw new Error(`Unsupported transport type: ${config.type}`)
     }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { CMD_OW_RESET, CMD_OW_SEARCH, CMD_OW_READ, CMD_OW_WRITE } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -44,6 +45,7 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
       const resp = await window.deviceApi.sendCommand(CMD_OW_RESET, [])
       const hasDevice = resp.payload.length > 0 && resp.payload[0] === 1
       setPresence(hasDevice)
+      recordStep('1W', 'reset', {})
       addRx(hasDevice ? 'PRESENCE detected' : 'NO DEVICE', '')
       setResult(hasDevice ? 'Device present ✓' : 'No device on bus')
     } catch (err: any) {
@@ -68,6 +70,7 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
         roms.push(hexRom(romBytes))
       }
       setRomList(roms)
+      recordStep('1W', 'search', {})
       addRx('SEARCH OK', `${roms.length} device(s)`)
       setResult(`Found ${roms.length} device(s)`)
     } catch (err: any) {
@@ -95,6 +98,7 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
         .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
         .join(' ')
       addRx('READ OK', hexOut)
+      recordStep('1W', 'read', { rom: romBytes, cmd: parseHex(owCmd), len: readLen })
       setResult(hexOut)
     } catch (err: any) {
       addRx('READ ERROR', err.message)
@@ -115,6 +119,7 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
     try {
       await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([...romBytes, ...dataBytes])))
       addRx('WRITE OK', `${dataBytes.length} bytes`)
+      recordStep('1W', 'write', { rom: romBytes, data: dataBytes })
       setResult(`${dataBytes.length} bytes written`)
     } catch (err: any) {
       addRx('WRITE ERROR', err.message)

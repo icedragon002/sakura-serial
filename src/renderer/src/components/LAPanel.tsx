@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { CMD_LA_CFG, CMD_LA_START, CMD_LA_STOP, CMD_LA_STATUS, CMD_LA_STREAM_MODE, CMD_LA_DATA } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
 import WaveformViewer, { type WaveformChannel } from './WaveformViewer'
@@ -74,6 +74,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
     try {
       await window.deviceApi.sendCommand(CMD_LA_START, [])
       setStatus('triggered')
+      recordStep('LA', 'start', {})
       addRx('SAMPLING', '')
     } catch (err: any) {
       addRx('START ERROR', err.message)
@@ -85,12 +86,46 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
     addTx('STOP', '')
     try {
       await window.deviceApi.sendCommand(CMD_LA_STOP, [])
-      setStatus('idle')
+      setStatus('done')
       addRx('STOPPED', '')
+
+      // Fetch captured data
+      try {
+        const dataResp = await window.deviceApi.sendCommand(CMD_LA_DATA, [])
+        if (dataResp.payload.length > 0) {
+          // Payload format: [channelCount(1B)] [samplesPerChannel(2B)]
+          //   [ch0_b0, ch0_b1, ...] [ch1_b0, ...]
+          const view = new DataView(
+            new Uint8Array(dataResp.payload).buffer
+          )
+          let off = 0
+          const chCount = view.getUint8(off++)
+          const samplesPerCh =
+            (view.getUint8(off) << 8) | view.getUint8(off + 1)
+          off += 2
+          const chColors = ['#ff6b9d', '#4fc3f7', '#81c784', '#ffd54f', '#ce93d8', '#ff8a65', '#90caf9', '#a1887f']
+          const activeChs = [0, 1, 2, 3, 4, 5, 6, 7].filter((i) => channels & (1 << i))
+          const chData: WaveformChannel[] = []
+          for (let ci = 0; ci < Math.min(chCount, activeChs.length); ci++) {
+            const ch = activeChs[ci]
+            const samples = new Uint8Array(samplesPerCh)
+            for (let s = 0; s < samplesPerCh && off < dataResp.payload.length; s++) {
+              samples[s] = dataResp.payload[off++] || 0
+            }
+            chData.push({ label: `CH${ch}`, data: samples, color: chColors[ch % chColors.length] })
+          }
+          setCapturedChannels(chData)
+          setTriggerSample(Math.floor(samplesPerCh / 4)) // approximate trigger at 25%
+          addRx(`DATA ${chData.length}ch × ${samplesPerCh}`, '')
+          recordStep('LA', 'start', {})
+        }
+      } catch {
+        addRx('Data fetch unavailable', '')
+      }
     } catch (err: any) {
       addRx('STOP ERROR', err.message)
     }
-  }, [isConnected, addTx, addRx])
+  }, [isConnected, channels, addTx, addRx])
 
   /* ── Status ─────────────────────────────────────── */
   const handleStatus = useCallback(async () => {

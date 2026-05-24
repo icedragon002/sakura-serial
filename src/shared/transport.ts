@@ -248,9 +248,10 @@ export class Session {
 
   async getDeviceInfo(): Promise<DeviceSysInfo> {
     const resp = await this.sendCommand(CMD_GET_INFO)
-    // Payload format (simple encoding):
-    //   [fwVerLen(1B)][fwVer(N)] [protoCount(1B)][proto(N)] ...
-    // For now return raw info; full parsing can be added later.
+    // Payload format:
+    //   [fwVerLen(1B)][fwVer(N)] [protoCount(1B)][proto(N)]
+    //   [nameLen(1B)][deviceName(N)] [vrefCount(1B)][ch(1B)|mV(2B)]...
+    //   [sramHi(1B)][sramLo(1B)]
     const view = new DataView(resp.payload.buffer, resp.payload.byteOffset, resp.payload.byteLength)
     let off = 0
     const fwLen = view.getUint8(off++)
@@ -261,13 +262,30 @@ export class Session {
     for (let i = 0; i < protoCount; i++) {
       protos.push(view.getUint8(off++))
     }
-    return {
-      firmwareVersion: fw,
-      supportedProtocols: protos,
-      vrefChannels: {},
-      sramUsage: 0,
-      deviceName: '',
+    // Device name
+    let deviceName = ''
+    if (off < resp.payload.length) {
+      const nameLen = view.getUint8(off++)
+      deviceName = new TextDecoder().decode(resp.payload.subarray(off, off + nameLen))
+      off += nameLen
     }
+    // VRef channels
+    const vrefChannels: Record<number, number> = {}
+    if (off < resp.payload.length) {
+      const vrefCount = view.getUint8(off++)
+      for (let i = 0; i < vrefCount && off + 2 < resp.payload.length; i++) {
+        const ch = view.getUint8(off++)
+        const mV = (view.getUint8(off) << 8) | view.getUint8(off + 1)
+        off += 2
+        vrefChannels[ch] = mV
+      }
+    }
+    // SRAM usage
+    let sramUsage = 0
+    if (off + 1 < resp.payload.length) {
+      sramUsage = (view.getUint8(off) << 8) | view.getUint8(off + 1)
+    }
+    return { firmwareVersion: fw, supportedProtocols: protos, vrefChannels, sramUsage, deviceName }
   }
 
   /* ── Internals ──────────────────────────────────── */

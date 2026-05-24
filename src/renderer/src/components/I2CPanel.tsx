@@ -8,6 +8,7 @@ import {
   ERROR_NAMES,
 } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -73,6 +74,7 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
       const resp = await window.deviceApi.sendCommand(CMD_I2C_SCAN, Array.from(payload))
       const addrs = Array.from(resp.payload)
       setScanResults(addrs)
+      recordStep('I2C', 'scan', { channel, speed })
       addRx('SCAN OK', `${addrs.length} device(s): ${addrs.map(hex).join(' ')}`)
       setResult(`Found ${addrs.length} device(s): ${addrs.map(hex).join(', ')}`)
     } catch (err: any) {
@@ -105,6 +107,7 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
         .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
         .join(' ')
       addRx('READ OK', hexData)
+      recordStep('I2C', 'read', { channel, addr, reg, len: readLen })
       setResult(hexData)
     } catch (err: any) {
       addRx('READ ERROR', err.message)
@@ -136,6 +139,7 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
       const payload = new Uint8Array([channel, addr, (reg >> 8) & 0xff, reg & 0xff, ...dataBytes])
       await window.deviceApi.sendCommand(CMD_I2C_WRITE, Array.from(payload))
       addRx('WRITE OK', `${dataBytes.length} bytes written`)
+      recordStep('I2C', 'write', { channel, addr, reg, data: dataBytes })
       setResult(`${dataBytes.length} bytes written`)
     } catch (err: any) {
       addRx('WRITE ERROR', err.message)

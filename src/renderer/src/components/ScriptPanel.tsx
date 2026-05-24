@@ -208,7 +208,7 @@ export default function ScriptPanel({ isConnected, onTransaction }: Props) {
           {t('script.examples')}
         </button>
         <button className="pp-btn" onClick={handleLoadMacro} disabled={running || isRecording()}>
-          {t('script.stopRecord')}
+          📋 Load Macro
         </button>
         <label style={{ fontSize: 11, display: 'flex', alignItems: 'center', gap: 4, marginLeft: 'auto', color: 'var(--text-muted)' }}>
           <input

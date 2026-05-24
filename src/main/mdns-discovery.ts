@@ -105,35 +105,70 @@ export class MdnsDiscovery extends EventEmitter {
 
   /* ── Parse mDNS response ─────────────────────────── */
   private parseMdnsResponse(data: Buffer, sourceIp: string): MdnsDevice | null {
-    // Very simple mDNS response parser
-    // In production, use the multicast-dns npm package for full compliance
     if (data.length < 12) return null
 
     // Check for mDNS response flag (0x8400)
     const flags = (data[2] << 8) | data[3]
     if ((flags & 0x8000) === 0) return null // not a response
 
-    // Try to find port (SRV record) in raw data
-    let port = 7777 // default probe-station port
+    let off = 12
+
+    // Skip questions
+    const qdcount = (data[4] << 8) | data[5]
+    for (let i = 0; i < qdcount; i++) {
+      off = this.skipName(data, off)
+      off += 4 // QTYPE(2) + QCLASS(2)
+    }
+
+    // Parse answers
+    const ancount = (data[6] << 8) | data[7]
+    let port = 7777
     let name = 'probe-station'
+    let fwVersion = ''
 
-    // Scan for known patterns in the raw response
-    for (let i = 12; i < data.length - 2; i++) {
-      // Look for port in SRV record (big-endian 2 bytes near end)
-      if (data[i] === 0x1e && data[i + 1] === 0x61) {
-        // 7777 = 0x1E61
-        port = 7777
+    for (let i = 0; i < ancount && off < data.length; i++) {
+      const rrType = (data[off + 2] << 8) | data[off + 3]
+      const rdLength = (data[off + 8] << 8) | data[off + 9]
+      const rdStart = off + 10
+
+      if (rrType === 33 && rdLength >= 6) {
+        // SRV record: [priority(2)] [weight(2)] [port(2)] [target(N)]
+        port = (data[rdStart + 4] << 8) | data[rdStart + 5]
+      } else if (rrType === 16 && rdLength > 1) {
+        // TXT record: [len(1)][key=value(N)]...
+        let t = rdStart
+        const end = rdStart + rdLength
+        while (t < end) {
+          const txtLen = data[t++]
+          if (t + txtLen <= end) {
+            const entry = data.toString('utf-8', t, t + txtLen)
+            if (entry.startsWith('name=')) {
+              name = entry.slice(5)
+            } else if (entry.startsWith('fw=')) {
+              fwVersion = entry.slice(3)
+            }
+            t += txtLen
+          } else {
+            break
+          }
+        }
       }
+
+      off = rdStart + rdLength
     }
 
-    // Try to extract device name from TXT records
-    const txtStart = data.indexOf('_probestation', 0, 'utf-8')
-    if (txtStart >= 0) {
-      // Simplified name extraction
-      name = 'probe-station'
-    }
+    return { host: sourceIp, port, name, firmwareVersion: fwVersion || undefined }
+  }
 
-    return { host: sourceIp, port, name }
+  /** Skip a DNS name (including compression pointers) and return new offset */
+  private skipName(data: Buffer, offset: number): number {
+    while (offset < data.length) {
+      const len = data[offset]
+      if (len === 0) return offset + 1
+      if ((len & 0xc0) === 0xc0) return offset + 2 // compression pointer
+      offset += 1 + len
+    }
+    return offset
   }
 }
 

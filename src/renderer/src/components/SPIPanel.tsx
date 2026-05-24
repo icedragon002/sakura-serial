@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react'
 import { CMD_SPI_TRANSFER, CMD_SPI_CS_CTRL } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -63,6 +64,7 @@ export default function SPIPanel({ isConnected, onTransaction }: Props) {
         .map((b) => b.toString(16).toUpperCase().padStart(2, '0'))
         .join(' ')
       addRx('XFER OK', hexOut)
+      recordStep('SPI', 'transfer', { bus, mode, speedKHz, cs, data: dataBytes })
       setRxData(hexOut)
     } catch (err: any) {
       addRx('XFER ERROR', err.message)
@@ -77,6 +79,7 @@ export default function SPIPanel({ isConnected, onTransaction }: Props) {
     addTx(`CS Bus${bus} CS${cs} → ${state ? 'HIGH' : 'LOW'}`, '')
     try {
       await window.deviceApi.sendCommand(CMD_SPI_CS_CTRL, Array.from(new Uint8Array([bus, cs, state])))
+      recordStep('SPI', 'csCtrl', { bus, cs, state })
       addRx('CS OK', state ? 'HIGH' : 'LOW')
     } catch (err: any) {
       addRx('CS ERROR', err.message)

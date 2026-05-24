@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { CMD_UART_CFG, CMD_UART_WRITE, CMD_UART_READ, CMD_UART_BREAK } from '../../../shared/commands'
+import { CMD_UART_CFG, CMD_UART_WRITE, CMD_UART_READ, CMD_UART_BREAK, EVENT_UART_DATA } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -40,6 +41,22 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
   const [autoRead, setAutoRead] = useState(false)
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  /* ── Async UART data listener ── */
+  useEffect(() => {
+    if (!isConnected) return
+    const cleanup = window.deviceApi.onAsyncEvent((eventType, payload) => {
+      if (eventType === EVENT_UART_DATA && payload.length > 0) {
+        const portIdx = payload[0]
+        const data = payload.slice(1)
+        const text = new TextDecoder().decode(data)
+        const hex = data.map((b) => b.toString(16).padStart(2, '0')).join(' ')
+        addRx(`ASYNC Port${portIdx} ${data.length}B`, hex)
+        setRxBuffer((prev) => prev + text)
+      }
+    })
+    return cleanup
+  }, [isConnected])
+
   const addTx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'UART', summary: s, data: d })
   const addRx = (s: string, d: string) =>
@@ -60,6 +77,7 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
       ])
       await window.deviceApi.sendCommand(CMD_UART_CFG, Array.from(payload))
       setConfigured(true)
+      recordStep('UART', 'config', { port, baud, dataBits, parity, stopBits })
       addRx('CFG OK', `${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits}`)
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
@@ -81,6 +99,8 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
     if (bytes.length === 0) return
     addTx(`WRITE Port${port} ${bytes.length}B`, isHex ? data : input)
     const payload = new Uint8Array([port, ...bytes])
+    if (isHex) recordStep('UART', 'write', { port, data: bytes })
+    else recordStep('UART', 'write', { port, text: input })
 
     window.deviceApi.sendCommand(CMD_UART_WRITE, Array.from(payload)).catch(() => {})
 
@@ -126,6 +146,7 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
         const text = new TextDecoder().decode(resp.payload)
         const hex = Array.from(resp.payload).map((b) => b.toString(16).padStart(2, '0')).join(' ')
         addRx(`READ ${resp.payload.length}B`, hex)
+        recordStep('UART', 'read', { port })
         setRxBuffer((prev) => prev + text)
       }
     } catch (err: any) {

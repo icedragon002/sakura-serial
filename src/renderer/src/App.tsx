@@ -11,7 +11,7 @@
 
 import { useState, useCallback, useEffect, useRef } from 'react'
 import type { TransportConfig } from '../../shared/transport'
-import ConnectionManager from './components/ConnectionManager'
+import ConnectionManager, { getBleSession } from './components/ConnectionManager'
 import TransactionLog from './components/TransactionLog'
 import type { TransactionEntry } from './components/TransactionLog'
 import I2CPanel from './components/I2CPanel'
@@ -271,15 +271,29 @@ export default function App() {
   )
 
   /* ── Connection handlers ── */
+  const bleMode = useRef(false)
+
   const handleConnect = useCallback(
     async (config: TransportConfig) => {
-      await window.deviceApi.connect(config)
+      const isBle = config.type === 'ble'
+      bleMode.current = isBle
+
+      if (!isBle) {
+        await window.deviceApi.connect(config)
+      }
+      // For BLE, the session is already open in ConnectionManager
       setIsConnected(true)
       setConnectedAt(Date.now())
 
-      // Try to get device info
       try {
-        const info = await window.deviceApi.getDeviceInfo()
+        let info
+        if (isBle) {
+          const bleSess = getBleSession()
+          if (bleSess) info = await bleSess.getDeviceInfo()
+          else throw new Error('No BLE session')
+        } else {
+          info = await window.deviceApi.getDeviceInfo()
+        }
         setDeviceName(info.firmwareVersion || info.deviceName || 'probe-station')
         setDeviceInfo({
           firmwareVersion: info.firmwareVersion || 'unknown',
@@ -309,9 +323,16 @@ export default function App() {
   )
 
   const handleDisconnect = useCallback(async () => {
-    await window.deviceApi.disconnect()
+    if (bleMode.current) {
+      const bleSess = getBleSession()
+      if (bleSess) await bleSess.close().catch(() => {})
+      bleMode.current = false
+    } else {
+      await window.deviceApi.disconnect()
+    }
     setIsConnected(false)
     setDeviceName('')
+    setDeviceInfo(null)
     setConnectedAt(undefined)
     addEntry({
       timestamp: Date.now(),

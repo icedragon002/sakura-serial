@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
-import { CMD_GPIO_CFG, CMD_GPIO_WRITE, CMD_GPIO_READ, CMD_GPIO_PWM } from '../../../shared/commands'
+import { useState, useCallback, useEffect } from 'react'
+import { CMD_GPIO_CFG, CMD_GPIO_WRITE, CMD_GPIO_READ, CMD_GPIO_PWM, EVENT_GPIO_CHANGE, EVENT_OVERCURRENT, EVENT_THERMAL_WARNING } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
 
 interface Props {
   isConnected: boolean
@@ -26,6 +27,28 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
   const [pwmDuty, setPwmDuty] = useState(500) // per-mille
   const [readVal, setReadVal] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  const [events, setEvents] = useState<string[]>([])
+
+  /* ── Async event listener ── */
+  useEffect(() => {
+    if (!isConnected) return
+    const cleanup = window.deviceApi.onAsyncEvent((eventType, payload) => {
+      if (eventType === EVENT_GPIO_CHANGE && payload.length >= 2) {
+        const p = payload[0]
+        const v = payload[1]
+        setEvents((prev) => {
+          const next = [...prev, `GPIO${p} → ${v}`]
+          return next.length > 20 ? next.slice(-20) : next
+        })
+        addRx(`EVENT GPIO${p}`, String(v))
+      } else if (eventType === EVENT_OVERCURRENT) {
+        addRx('⚠ OVCURRENT', '')
+      } else if (eventType === EVENT_THERMAL_WARNING) {
+        addRx('🌡 THERMAL', '')
+      }
+    })
+    return cleanup
+  }, [isConnected])
 
   const addTx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'GPIO', summary: s, data: d })
@@ -42,6 +65,7 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
         CMD_GPIO_CFG,
         Array.from(new Uint8Array([pin, MODE_MAP[mode], PULL_MAP[pull]]))
       )
+      recordStep('GPIO', 'config', { pin, mode: MODE_MAP[mode], pull: PULL_MAP[pull] })
       addRx('CFG OK', '')
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
@@ -55,6 +79,7 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
     try {
       await window.deviceApi.sendCommand(CMD_GPIO_WRITE, Array.from(new Uint8Array([pin, val])))
       setOutputVal(val)
+      recordStep('GPIO', 'write', { pin, value: val })
       addRx('WRITE OK', String(val))
     } catch (err: any) {
       addRx('WRITE ERROR', err.message)
@@ -68,6 +93,7 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
       const resp = await window.deviceApi.sendCommand(CMD_GPIO_READ, Array.from(new Uint8Array([pin])))
       const val = resp.payload.length > 0 ? resp.payload[0] : 0
       setReadVal(val)
+      recordStep('GPIO', 'read', { pin })
       addRx(`READ Pin${pin}`, String(val))
     } catch (err: any) {
       addRx('READ ERROR', err.message)
@@ -85,6 +111,7 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
         (pwmDuty >> 8) & 0xff, pwmDuty & 0xff,
       ])
       await window.deviceApi.sendCommand(CMD_GPIO_PWM, Array.from(payload))
+      recordStep('GPIO', 'pwm', { pin, freq: pwmFreq, duty: pwmDuty })
       addRx('PWM OK', `${pwmFreq}Hz ${(pwmDuty / 10).toFixed(1)}%`)
     } catch (err: any) {
       addRx('PWM ERROR', err.message)

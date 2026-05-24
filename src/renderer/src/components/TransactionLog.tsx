@@ -1,5 +1,6 @@
-import { useRef, useEffect, useCallback } from 'react'
+import { useRef, useEffect, useCallback, useState } from 'react'
 import { useT } from '../i18n/I18nContext'
+import { getAllDecoders, decodeWith, type DecodeResult } from '../decoders/index'
 
 export interface TransactionEntry {
   id: number
@@ -40,6 +41,21 @@ export default function TransactionLog({
 }: Props) {
   const { t } = useT()
   const containerRef = useRef<HTMLDivElement>(null)
+  const [decoderName, setDecoderName] = useState<string>('')
+  const [decodedResult, setDecodedResult] = useState<DecodeResult | null>(null)
+  const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null)
+  const decoders = getAllDecoders()
+
+  const handleDecode = useCallback((entry: TransactionEntry) => {
+    if (!entry.data) return
+    const bytes = entry.data
+      .replace(/\s/g, '')
+      .match(/.{1,2}/g)
+      ?.map((b) => parseInt(b, 16)) ?? []
+    if (bytes.length === 0) return
+    setSelectedEntryId(entry.id)
+    setDecodedResult(decodeWith(new Uint8Array(bytes), decoderName || undefined))
+  }, [decoderName])
 
   useEffect(() => {
     if (autoScroll && containerRef.current) {
@@ -77,6 +93,17 @@ export default function TransactionLog({
         <span className="log-toolbar__counter">
           {entries.length.toLocaleString()} entries
         </span>
+        <select
+          value={decoderName}
+          onChange={(e) => setDecoderName(e.target.value)}
+          style={{ fontSize: 11, padding: '2px 4px', background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+          title="Protocol decoder"
+        >
+          <option value="">Auto</option>
+          {decoders.map((d) => (
+            <option key={d.name} value={d.name}>{d.name}</option>
+          ))}
+        </select>
         <button className="log-export-btn" onClick={() => onExport('csv')} title="Export CSV">
           CSV
         </button>
@@ -114,8 +141,23 @@ export default function TransactionLog({
               </span>
               <span className="log-line__summary">{entry.summary}</span>
               {entry.data && (
-                <span className={`log-line__data log-line__data--${entry.direction}`}>
-                  {entry.data}
+                <>
+                  <span className={`log-line__data log-line__data--${entry.direction}`}>
+                    {entry.data}
+                  </span>
+                  <button
+                    className="log-toolbar__btn"
+                    onClick={() => handleDecode(entry)}
+                    style={{ fontSize: 9, padding: '1px 4px', marginLeft: 4, opacity: 0.6 }}
+                    title="Decode"
+                  >
+                    D
+                  </button>
+                </>
+              )}
+              {selectedEntryId === entry.id && decodedResult && (
+                <span style={{ fontSize: 10, color: 'var(--accent)', marginLeft: 8, fontFamily: 'var(--font-mono)' }}>
+                  {decodedResult.protocol}: {decodedResult.summary}
                 </span>
               )}
             </div>

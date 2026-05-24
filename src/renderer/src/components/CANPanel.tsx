@@ -1,6 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { CMD_CAN_CFG, CMD_CAN_SEND, CMD_CAN_FILTER, CMD_CAN_MONITOR, EVENT_CAN_FRAME_RX } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
+import { recordStep } from '../macro-recorder'
+import { decodeWith } from '../decoders/index'
 
 interface Props {
   isConnected: boolean
@@ -34,6 +36,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
   const [txDlc, setTxDlc] = useState(8)
   const [txData, setTxData] = useState('')
   const [busy, setBusy] = useState(false)
+  const [decodedFrame, setDecodedFrame] = useState<string>('')
 
   const [frames, setFrames] = useState<CanFrame[]>([])
   const [filterId, setFilterId] = useState('0x000')
@@ -60,6 +63,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
       ])
       await window.deviceApi.sendCommand(CMD_CAN_CFG, Array.from(payload))
       setConfigured(true)
+      recordStep('CAN', 'config', { mode, bitrate, fd, termination })
       addRx('CFG OK', '')
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
@@ -96,6 +100,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
     try {
       await window.deviceApi.sendCommand(CMD_CAN_MONITOR, monitoring ? [] : [1])
       setMonitoring((v) => !v)
+      recordStep('CAN', monitoring ? 'monitorStop' : 'monitorStart', {})
       addRx(monitoring ? 'MONITOR STOP' : 'MONITOR START', '')
     } catch (err: any) {
       addRx('MONITOR ERROR', err.message)
@@ -118,6 +123,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
       ])
       await window.deviceApi.sendCommand(CMD_CAN_SEND, Array.from(payload))
       addRx('SEND OK', '')
+      recordStep('CAN', 'send', { id, ide: txIde, data: dataBytes })
     } catch (err: any) {
       addRx('SEND ERROR', err.message)
     } finally {
@@ -138,6 +144,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
         (id >> 24) & 0xff, (id >> 16) & 0xff, (id >> 8) & 0xff, id & 0xff,
       ])
       await window.deviceApi.sendCommand(CMD_CAN_FILTER, Array.from(payload))
+      recordStep('CAN', 'filter', { filterId, filterMask })
       addRx('FILTER OK', '')
     } catch (err: any) {
       addRx('FILTER ERROR', err.message)
@@ -190,11 +197,31 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
           {/* Monitor Toggle */}
           <div className="pp-row">
             <button className={`pp-btn pp-btn--scan ${monitoring ? 'pp-btn--active' : ''}`} onClick={toggleMonitor} disabled={!isConnected}>
-              {monitoring ? '⏹ Stop Monitor' : '▶ Start Monitor'}
+              {monitoring ? '⏹ Stop' : '▶ Monitor'}
             </button>
             <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
-              {frames.length} frames captured
+              {frames.length} frames
             </span>
+            {frames.length > 0 && (
+              <button
+                className="pp-btn"
+                onClick={() => {
+                  const csv = ['id,ide,dlc,data,timestamp']
+                    .concat(frames.map((f) =>
+                      `${f.id.toString(16)},${f.ide},${f.dlc},"${f.data.map((b) => b.toString(16).padStart(2, '0')).join(' ')}",${new Date(f.timestamp).toISOString()}`
+                    ))
+                    .join('\n')
+                  const blob = new Blob([csv], { type: 'text/csv' })
+                  const url = URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url; a.download = `can-frames-${Date.now()}.csv`; a.click()
+                  URL.revokeObjectURL(url)
+                }}
+                style={{ fontSize: 10 }}
+              >
+                Export CSV
+              </button>
+            )}
           </div>
 
           {/* Filter */}
@@ -240,7 +267,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
           {frames.length > 0 && (
             <div className="pp-row">
               <div className="pp-field pp-field--grow">
-                <label>Frame Log</label>
+                <label>Frame Log ({decodedFrame && <span style={{ color: 'var(--accent)', fontSize: 10 }}>{decodedFrame}</span>})</label>
                 <div className="can-log">
                   {frames.slice(-30).map((f, i) => (
                     <div key={i} className="can-log-line">
@@ -249,6 +276,22 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
                       <span className="can-log-data">
                         {f.data.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')}
                       </span>
+                      <button
+                        className="log-toolbar__btn"
+                        onClick={() => {
+                          const raw = new Uint8Array([
+                            (f.id >> 24) & 0xff, (f.id >> 16) & 0xff,
+                            (f.id >> 8) & 0xff, f.id & 0xff,
+                            f.ide, f.dlc, ...f.data,
+                          ])
+                          const result = decodeWith(raw)
+                          setDecodedFrame(`${result.protocol}: ${result.summary}`)
+                        }}
+                        style={{ fontSize: 9, padding: '1px 4px', marginLeft: 4, opacity: 0.6 }}
+                        title="Decode"
+                      >
+                        D
+                      </button>
                     </div>
                   ))}
                 </div>

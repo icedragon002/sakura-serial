@@ -89,20 +89,8 @@ const device = {
       const resp = await sendCommand(0x11, [])
       return { fw: String.fromCharCode(...resp.payload.slice(1, 1 + resp.payload[0])), protocols: resp.payload.slice(0) }
     },
-  },
-  i2c: {
-    async scan(opts) {
-      const speedCode = (opts.speed || 400000) === 100000 ? 0 : 1
-      const resp = await sendCommand(0x20, [opts.channel || 0, speedCode])
-      return Array.from(resp.payload || [])
-    },
-    async read(opts) {
-      const resp = await sendCommand(0x21, [opts.channel || 0, opts.addr, (opts.reg >> 8) & 0xff, opts.reg & 0xff, (opts.len >> 8) & 0xff, opts.len & 0xff])
-      return Array.from(resp.payload || [])
-    },
-    async write(opts) {
-      await sendCommand(0x22, [opts.channel || 0, opts.addr, (opts.reg >> 8) & 0xff, opts.reg & 0xff, ...(opts.data || [])])
-    },
+    async setVref(port, mV) { await sendCommand(0x13, [port, (mV >> 8) & 0xff, mV & 0xff]) },
+    async resetRP2350() { await sendCommand(0x12, []) },
   },
   spi: {
     async transfer(opts) {
@@ -112,23 +100,15 @@ const device = {
     },
     async csControl(bus, cs, state) { await sendCommand(0x31, [bus, cs, state]) },
   },
-  uart: {
-    async config(opts) {
-      const parMap = { none: 0, even: 1, odd: 2, mark: 3, space: 4 }
-      await sendCommand(0x40, [opts.port || 0, (opts.baud >> 24) & 0xff, (opts.baud >> 16) & 0xff, (opts.baud >> 8) & 0xff, opts.baud & 0xff, opts.dataBits || 8, parMap[opts.parity || 'none'] || 0, opts.stopBits || 1])
-    },
-    async write(port, data) { await sendCommand(0x41, [port, ...data]) },
-    async read(port, timeoutMs = 100) {
-      const resp = await sendCommand(0x42, [port, (timeoutMs >> 8) & 0xff, timeoutMs & 0xff])
-      return Array.from(resp.payload || [])
-    },
-  },
   can: {
     async config(opts) {
       await sendCommand(0x50, [opts.mode || 0, (opts.bitrate >> 24) & 0xff, (opts.bitrate >> 16) & 0xff, (opts.bitrate >> 8) & 0xff, opts.bitrate & 0xff, opts.fd || 0, opts.termination || 1])
     },
     async sendFrame(opts) {
       await sendCommand(0x51, [(opts.id >> 24) & 0xff, (opts.id >> 16) & 0xff, (opts.id >> 8) & 0xff, opts.id & 0xff, opts.ide || 0, opts.data.length, ...opts.data])
+    },
+    async setFilter(filterNum, mask, id) {
+      await sendCommand(0x52, [filterNum, (mask >> 24) & 0xff, (mask >> 16) & 0xff, (mask >> 8) & 0xff, mask & 0xff, (id >> 24) & 0xff, (id >> 16) & 0xff, (id >> 8) & 0xff, id & 0xff])
     },
     async startMonitor() { await sendCommand(0x53, [1]) },
     async stopMonitor() { await sendCommand(0x53, [0]) },
@@ -149,6 +129,38 @@ const device = {
       return Array.from(resp.payload || [])
     },
     async write(rom, data) { await sendCommand(0x63, [...rom, ...data]) },
+  },
+  i2c: {
+    async scan(opts) {
+      const speedCode = (opts.speed || 400000) === 100000 ? 0 : 1
+      const resp = await sendCommand(0x20, [opts.channel || 0, speedCode])
+      return Array.from(resp.payload || [])
+    },
+    async read(opts) {
+      const resp = await sendCommand(0x21, [opts.channel || 0, opts.addr, (opts.reg >> 8) & 0xff, opts.reg & 0xff, (opts.len >> 8) & 0xff, opts.len & 0xff])
+      return Array.from(resp.payload || [])
+    },
+    async write(opts) {
+      await sendCommand(0x22, [opts.channel || 0, opts.addr, (opts.reg >> 8) & 0xff, opts.reg & 0xff, ...(opts.data || [])])
+    },
+    async writeRead(opts) {
+      const resp = await sendCommand(0x23, [opts.channel || 0, opts.addr, (opts.writeData || []).length, ...(opts.writeData || []), (opts.readLen >> 8) & 0xff, opts.readLen & 0xff])
+      return Array.from(resp.payload || [])
+    },
+  },
+  uart: {
+    async config(opts) {
+      const parMap = { none: 0, even: 1, odd: 2, mark: 3, space: 4 }
+      await sendCommand(0x40, [opts.port || 0, (opts.baud >> 24) & 0xff, (opts.baud >> 16) & 0xff, (opts.baud >> 8) & 0xff, opts.baud & 0xff, opts.dataBits || 8, parMap[opts.parity || 'none'] || 0, opts.stopBits || 1])
+    },
+    async write(port, data) { await sendCommand(0x41, [port, ...data]) },
+    async read(port, timeoutMs = 100) {
+      const resp = await sendCommand(0x42, [port, (timeoutMs >> 8) & 0xff, timeoutMs & 0xff])
+      return Array.from(resp.payload || [])
+    },
+    async sendBreak(port, durationMs = 100) {
+      await sendCommand(0x43, [port, (durationMs >> 8) & 0xff, durationMs & 0xff])
+    },
   },
   gpio: {
     async config(pin, mode, pull) { await sendCommand(0x70, [pin, mode, pull]) },
@@ -171,6 +183,7 @@ const device = {
       const resp = await sendCommand(0x84, [])
       return (resp.payload && resp.payload[0]) || 0
     },
+    async setStreamMode(mode) { await sendCommand(0x85, [mode]) },
   },
   delay(ms) { return new Promise(r => setTimeout(r, ms)) },
 }

@@ -6,6 +6,10 @@ import { useT } from '../i18n/I18nContext'
 
 let bleSession: Session | null = null
 
+export function getBleSession(): Session | null {
+  return bleSession
+}
+
 interface Props {
   isConnected: boolean
   deviceName: string
