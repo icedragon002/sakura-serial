@@ -150,6 +150,7 @@ export default function TransactionLog({
                     onClick={() => handleDecode(entry)}
                     style={{ fontSize: 9, padding: '1px 4px', marginLeft: 4, opacity: 0.6 }}
                     title="Decode"
+                    aria-label="Decode protocol data"
                   >
                     D
                   </button>

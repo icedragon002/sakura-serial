@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from 'react'
+import { useState, useCallback, useRef, useEffect, useMemo } from 'react'
 import { CMD_UART_CFG, CMD_UART_WRITE, CMD_UART_READ, CMD_UART_BREAK, EVENT_UART_DATA } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
 import { recordStep } from '../macro-recorder'
@@ -57,10 +57,14 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
     return cleanup
   }, [isConnected])
 
-  const addTx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'UART', summary: s, data: d })
-  const addRx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'UART', summary: s, data: d })
+  const addTxRef = useRef(onTransaction)
+  addTxRef.current = onTransaction
+  const addTx = useMemo(() => (s: string, d: string) =>
+    addTxRef.current({ timestamp: Date.now(), direction: 'tx', protocol: 'UART', summary: s, data: d }), [])
+  const addRxRef = useRef(onTransaction)
+  addRxRef.current = onTransaction
+  const addRx = useMemo(() => (s: string, d: string) =>
+    addRxRef.current({ timestamp: Date.now(), direction: 'rx', protocol: 'UART', summary: s, data: d }), [])
 
   /* ── Configure ──────────────────────────────────── */
   const handleConfig = useCallback(async () => {

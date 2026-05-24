@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { CMD_GPIO_CFG, CMD_GPIO_WRITE, CMD_GPIO_READ, CMD_GPIO_PWM, EVENT_GPIO_CHANGE, EVENT_OVERCURRENT, EVENT_THERMAL_WARNING } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
 import { recordStep } from '../macro-recorder'
@@ -50,10 +50,14 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
     return cleanup
   }, [isConnected])
 
-  const addTx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'GPIO', summary: s, data: d })
-  const addRx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'GPIO', summary: s, data: d })
+  const addTxRef = useRef(onTransaction)
+  addTxRef.current = onTransaction
+  const addTx = useMemo(() => (s: string, d: string) =>
+    addTxRef.current({ timestamp: Date.now(), direction: 'tx', protocol: 'GPIO', summary: s, data: d }), [])
+  const addRxRef = useRef(onTransaction)
+  addRxRef.current = onTransaction
+  const addRx = useMemo(() => (s: string, d: string) =>
+    addRxRef.current({ timestamp: Date.now(), direction: 'rx', protocol: 'GPIO', summary: s, data: d }), [])
 
   /* ── Config ─────────────────────────────────────── */
   const handleConfig = useCallback(async () => {

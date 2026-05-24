@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react'
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react'
 import { CMD_CAN_CFG, CMD_CAN_SEND, CMD_CAN_FILTER, CMD_CAN_MONITOR, EVENT_CAN_FRAME_RX } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
 import { recordStep } from '../macro-recorder'
@@ -42,10 +42,14 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
   const [filterId, setFilterId] = useState('0x000')
   const [filterMask, setFilterMask] = useState('0x7FF')
 
-  const addTx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'CAN', summary: s, data: d })
-  const addRx = (s: string, d: string) =>
-    onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'CAN', summary: s, data: d })
+  const addTxRef = useRef(onTransaction)
+  addTxRef.current = onTransaction
+  const addTx = useMemo(() => (s: string, d: string) =>
+    addTxRef.current({ timestamp: Date.now(), direction: 'tx', protocol: 'CAN', summary: s, data: d }), [])
+  const addRxRef = useRef(onTransaction)
+  addRxRef.current = onTransaction
+  const addRx = useMemo(() => (s: string, d: string) =>
+    addRxRef.current({ timestamp: Date.now(), direction: 'rx', protocol: 'CAN', summary: s, data: d }), [])
 
   const parseHex = (s: string): number => parseInt(s.replace(/^0x/i, ''), 16)
 
@@ -270,7 +274,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
                 <label>Frame Log ({decodedFrame && <span style={{ color: 'var(--accent)', fontSize: 10 }}>{decodedFrame}</span>})</label>
                 <div className="can-log">
                   {frames.slice(-30).map((f, i) => (
-                    <div key={i} className="can-log-line">
+                    <div key={`${f.timestamp}-${i}`} className="can-log-line">
                       <span className="can-log-id">{f.id.toString(16).toUpperCase().padStart(f.ide ? 8 : 3, '0')}</span>
                       <span className="can-log-dlc">DLC:{f.dlc}</span>
                       <span className="can-log-data">
