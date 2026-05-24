@@ -45,11 +45,17 @@ export default function TransactionLog({
   const [decodedResult, setDecodedResult] = useState<DecodeResult | null>(null)
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null)
   const [protocolFilter, setProtocolFilter] = useState<string>('')
+  const [searchText, setSearchText] = useState('')
   const decoders = getAllDecoders()
 
-  const filteredEntries = protocolFilter
-    ? entries.filter((e) => e.protocol === protocolFilter)
-    : entries
+  const filteredEntries = entries.filter((e) => {
+    if (protocolFilter && e.protocol !== protocolFilter) return false
+    if (searchText) {
+      const q = searchText.toLowerCase()
+      return e.summary.toLowerCase().includes(q) || e.data.toLowerCase().includes(q)
+    }
+    return true
+  })
 
   const protocols = [...new Set(entries.map((e) => e.protocol))].sort()
 
@@ -97,6 +103,14 @@ export default function TransactionLog({
           Auto-scroll
         </button>
         <div className="log-toolbar__spacer" />
+        <input
+          type="text"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="Search…"
+          style={{ fontSize: 11, padding: '2px 6px', width: 80, background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+          spellCheck={false}
+        />
         <select
           value={protocolFilter}
           onChange={(e) => setProtocolFilter(e.target.value)}

@@ -23,6 +23,7 @@ import GPIOPanel from './components/GPIOPanel'
 import LAPanel from './components/LAPanel'
 import ScriptPanel from './components/ScriptPanel'
 import DashboardPanel from './components/DashboardPanel'
+import ErrorBoundary from './components/ErrorBoundary'
 import SakuraParticles from './components/SakuraParticles'
 import Mascot from './components/Mascot'
 import SettingsButton from './components/SettingsButton'
@@ -453,40 +454,58 @@ export default function App() {
 
           {/* Active Panel */}
           <div className="protocol-panel-area">
-            {activeTab === 'i2c' && (
-              <I2CPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'spi' && (
-              <SPIPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'uart' && (
-              <UARTPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'can' && (
-              <CANPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'onewire' && (
-              <OneWirePanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'gpio' && (
-              <GPIOPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'la' && (
-              <LAPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'script' && (
-              <ScriptPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
-            )}
-            {activeTab === 'dashboard' && (
-              <DashboardPanel
-                isConnected={isConnected}
-                deviceInfo={deviceInfo}
-                txCount={txCount}
-                rxCount={rxCount}
-                entryCount={entries.length}
-                connectedAt={connectedAt}
-              />
-            )}
+            <ErrorBoundary fallbackLabel="I²C Panel crashed">
+              {activeTab === 'i2c' && (
+                <I2CPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="SPI Panel crashed">
+              {activeTab === 'spi' && (
+                <SPIPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="UART Panel crashed">
+              {activeTab === 'uart' && (
+                <UARTPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="CAN Panel crashed">
+              {activeTab === 'can' && (
+                <CANPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="1-Wire Panel crashed">
+              {activeTab === 'onewire' && (
+                <OneWirePanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="GPIO Panel crashed">
+              {activeTab === 'gpio' && (
+                <GPIOPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="LA Panel crashed">
+              {activeTab === 'la' && (
+                <LAPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Script Panel crashed">
+              {activeTab === 'script' && (
+                <ScriptPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+              )}
+            </ErrorBoundary>
+            <ErrorBoundary fallbackLabel="Dashboard crashed">
+              {activeTab === 'dashboard' && (
+                <DashboardPanel
+                  isConnected={isConnected}
+                  deviceInfo={deviceInfo}
+                  txCount={txCount}
+                  rxCount={rxCount}
+                  entryCount={entries.length}
+                  connectedAt={connectedAt}
+                />
+              )}
+            </ErrorBoundary>
           </div>
 
           {/* Transaction Log */}

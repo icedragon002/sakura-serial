@@ -42,6 +42,11 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
   const [autoRead, setAutoRead] = useState(false)
   const autoTimer = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Auto-send
+  const [autoSend, setAutoSend] = useState(false)
+  const [autoSendInterval, setAutoSendInterval] = useState(1000)
+  const autoSendTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+
   /* ── Async UART data listener ── */
   useEffect(() => {
     if (!isConnected) return
@@ -169,6 +174,15 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
     return () => { if (autoTimer.current) clearInterval(autoTimer.current) }
   }, [autoRead, isConnected, handleRead])
 
+  /* ── Auto Send ──────────────────────────────────── */
+  useEffect(() => {
+    if (autoSendTimer.current) { clearInterval(autoSendTimer.current); autoSendTimer.current = null }
+    if (autoSend && isConnected && input.trim()) {
+      autoSendTimer.current = setInterval(doSend, autoSendInterval)
+    }
+    return () => { if (autoSendTimer.current) clearInterval(autoSendTimer.current) }
+  }, [autoSend, isConnected, autoSendInterval, doSend, input])
+
   /* ── Break ──────────────────────────────────────── */
   const handleBreak = useCallback(async () => {
     if (!isConnected) return
@@ -269,6 +283,26 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
               {autoRead ? '⏸ Auto' : '▶ Auto'}
             </button>
             <button className="pp-btn" onClick={handleBreak} disabled={!isConnected}>BREAK</button>
+          </div>
+
+          {/* Auto-send Row */}
+          <div className="pp-row" style={{ alignItems: 'center' }}>
+            <button
+              className={`pp-opt ${autoSend ? 'pp-opt--active' : ''}`}
+              onClick={() => setAutoSend((v) => !v)}
+              disabled={!isConnected || !input.trim()}
+            >
+              {autoSend ? '⏸ Auto Send' : '▶ Auto Send'}
+            </button>
+            <label style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 4 }}>every</label>
+            <input
+              type="number"
+              value={autoSendInterval}
+              onChange={(e) => setAutoSendInterval(Math.max(50, Number(e.target.value)))}
+              min={50} step={100}
+              style={{ width: 60, fontSize: 11, padding: '2px 4px', background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+            />
+            <label style={{ fontSize: 11, color: 'var(--text-muted)' }}>ms</label>
           </div>
 
           {/* RX Buffer */}

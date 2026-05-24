@@ -41,6 +41,9 @@ export default function DashboardPanel({
   const txPrev = useRef(txCount)
   const rxPrev = useRef(rxCount)
   const rateTimer = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [txHistory, setTxHistory] = useState<number[]>(Array(30).fill(0))
+  const [rxHistory, setRxHistory] = useState<number[]>(Array(30).fill(0))
+  const sparklineRef = useRef<HTMLCanvasElement>(null)
 
   /* ── Uptime ticker ── */
   useEffect(() => {
@@ -63,13 +66,41 @@ export default function DashboardPanel({
   /* ── TX/RX rate ── */
   useEffect(() => {
     rateTimer.current = setInterval(() => {
-      setTxRate(txCount - txPrev.current)
-      setRxRate(rxCount - rxPrev.current)
+      const txR = txCount - txPrev.current
+      const rxR = rxCount - rxPrev.current
+      setTxRate(txR)
+      setRxRate(rxR)
+      setTxHistory((prev) => [...prev.slice(1), txR])
+      setRxHistory((prev) => [...prev.slice(1), rxR])
       txPrev.current = txCount
       rxPrev.current = rxCount
     }, 1000)
     return () => { if (rateTimer.current) clearInterval(rateTimer.current) }
   }, [txCount, rxCount])
+
+  /* ── Sparkline canvas draw ── */
+  useEffect(() => {
+    const c = sparklineRef.current
+    if (!c || !isConnected) return
+    const ctx = c.getContext('2d')
+    if (!ctx) return
+    const w = c.width; const h = c.height
+    ctx.clearRect(0, 0, w, h)
+    const drawLine = (data: number[], color: string) => {
+      const max = Math.max(1, ...data)
+      ctx.strokeStyle = color
+      ctx.lineWidth = 1.5
+      ctx.beginPath()
+      data.forEach((v, i) => {
+        const x = (i / (data.length - 1)) * w
+        const y = h - (v / max) * (h - 4) - 2
+        i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y)
+      })
+      ctx.stroke()
+    }
+    drawLine(txHistory, '#ff6b9d')
+    drawLine(rxHistory, '#4fc3f7')
+  }, [txHistory, rxHistory, isConnected])
 
   const protocolCount = deviceInfo?.supportedProtocols?.length ?? 0
 
@@ -100,6 +131,9 @@ export default function DashboardPanel({
             <div style={cardTitleStyle}>Activity</div>
             <div style={gridStyle}>
               <Metric label={t('dash.txRate')} value={`${txRate}/s`} highlight />
+              <div style={{ gridColumn: '1 / -1', padding: '4px 12px 0' }}>
+                <canvas ref={sparklineRef} width={300} height={40} style={{ width: '100%', height: 40 }} />
+              </div>
               <Metric label={t('dash.rxRate')} value={`${rxRate}/s`} highlight />
               <Metric label={`Total ${t('status.tx')}`} value={String(txCount)} />
               <Metric label={`Total ${t('status.rx')}`} value={String(rxCount)} />
