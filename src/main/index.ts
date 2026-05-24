@@ -18,6 +18,7 @@ import { UsbTransport, listUsbDevices } from './usb-transport'
 import { TcpTransport } from './tcp-transport'
 import { scanMdnsDevices, type MdnsDevice } from './mdns-discovery'
 import { autoUpdater } from 'electron-updater'
+import { VirtualTransport } from './virtual-device'
 import {
   startBleScan, stopBleScan, connectBle, disconnectBle,
   isBleConnected, discoverServices, readCharacteristic,
@@ -118,6 +119,17 @@ function registerIpcHandlers(): void {
   ipcMain.handle('device:list', async (): Promise<DeviceInfo[]> => {
     const devices: DeviceInfo[] = []
 
+    // Virtual Device (always available)
+    devices.push({
+      id: 'virtual:1',
+      type: 'usb',
+      name: 'Virtual Device (Simulator)',
+      path: 'virtual://sim',
+      manufacturer: 'Sakura Serial',
+      serialNumber: 'SIM-0001',
+      detail: 'virtual://sim',
+    })
+
     // USB CDC devices (serial ports)
     try {
       const ports = await listUsbDevices()
@@ -167,6 +179,10 @@ function registerIpcHandlers(): void {
 
     // Create appropriate transport
     let transport
+    // Virtual device
+    if (config.path === 'virtual://sim' || config.path.startsWith('virtual://')) {
+      transport = new VirtualTransport()
+    } else {
     switch (config.type) {
       case 'usb':
         transport = new UsbTransport()
@@ -183,6 +199,7 @@ function registerIpcHandlers(): void {
       default:
         throw new Error(`Unsupported transport type: ${config.type}`)
     }
+    } // end of virtual device check
 
     session = new Session(transport, {
       timeout: 1000,
