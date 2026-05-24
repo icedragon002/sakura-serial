@@ -35,6 +35,53 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
   const hexRom = (bytes: number[]): string =>
     bytes.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(':')
 
+  /* ── DS18B20 Temperature ──────────────────────── */
+  const handleReadTemp = useCallback(async () => {
+    if (!isConnected) return
+    setBusy(true)
+    const romBytes = parseRom(rom)
+    const hasRom = romBytes.length === 8
+    addTx('DS18B20 Read Temp', '')
+    try {
+      // Reset
+      let resp = await window.deviceApi.sendCommand(CMD_OW_RESET, [])
+      if (resp.payload.length === 0 || resp.payload[0] !== 1) {
+        setResult('No DS18B20 detected'); setBusy(false); return
+      }
+      // Match ROM or Skip ROM
+      if (hasRom) {
+        await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([0x55, ...romBytes])))
+      } else {
+        await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([0xCC])))
+      }
+      // Convert T (0x44)
+      await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([0x44])))
+      await new Promise((r) => setTimeout(r, 750))
+      // Reset again
+      await window.deviceApi.sendCommand(CMD_OW_RESET, [])
+      // Match/Skip ROM again
+      if (hasRom) {
+        await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([0x55, ...romBytes])))
+      } else {
+        await window.deviceApi.sendCommand(CMD_OW_WRITE, Array.from(new Uint8Array([0xCC])))
+      }
+      // Read Scratchpad (0xBE)
+      resp = await window.deviceApi.sendCommand(CMD_OW_READ, Array.from(new Uint8Array([0xBE, 0x00, 0x09])))
+      if (resp.payload.length >= 2) {
+        const tempRaw = ((resp.payload[1] << 8) | resp.payload[0])
+        const celsius = tempRaw / 16.0
+        addRx('TEMP', `${celsius.toFixed(2)}°C`)
+        setResult(`${celsius.toFixed(2)}°C`)
+        recordStep('1W', 'read', { rom: romBytes, cmd: 0xBE, len: 9 })
+      }
+    } catch (err: any) {
+      addRx('TEMP ERROR', err.message)
+      setResult(`Error: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [isConnected, rom, addTx, addRx])
+
   /* ── Reset ──────────────────────────────────────── */
   const handleReset = useCallback(async () => {
     if (!isConnected) return
@@ -136,10 +183,11 @@ export default function OneWirePanel({ isConnected, onTransaction }: Props) {
         <span className="pp-title">{t('ow.title')}</span>
       </div>
 
-      {/* Reset + Search */}
+      {/* Reset + Search + Temp */}
       <div className="pp-row">
         <button className="pp-btn pp-btn--scan" onClick={handleReset} disabled={busy || !isConnected}>Reset</button>
         <button className="pp-btn pp-btn--scan" onClick={handleSearch} disabled={busy || !isConnected}>Search ROM</button>
+        <button className="pp-btn pp-btn--read" onClick={handleReadTemp} disabled={busy || !isConnected}>🌡 Read Temp</button>
         {presence !== null && (
           <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: presence ? 'var(--accent)' : 'var(--error)' }}>
             {presence ? '✓ Present' : '✗ No device'}

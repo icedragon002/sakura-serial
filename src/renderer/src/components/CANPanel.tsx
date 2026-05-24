@@ -27,6 +27,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
   const [mode, setMode] = useState(0) // 0=Normal, 1=ListenOnly
   const [bitrate, setBitrate] = useState(500_000)
   const [fd, setFd] = useState(0)
+  const [fdBitrate, setFdBitrate] = useState(2_000_000)
   const [termination, setTermination] = useState(1)
   const [configured, setConfigured] = useState(false)
   const [monitoring, setMonitoring] = useState(false)
@@ -58,16 +59,17 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
     if (!isConnected) return
     setBusy(true)
     const modeName = mode === 0 ? 'Normal' : 'ListenOnly'
-    addTx(`CFG ${modeName} ${bitrate / 1000}kbps FD=${fd ? 'ON' : 'OFF'} Term=${termination ? '120Ω' : 'OFF'}`, '')
+    addTx(`CFG ${modeName} ${bitrate / 1000}kbps FD=${fd ? `${fdBitrate / 1000}kbps` : 'OFF'} Term=${termination ? '120Ω' : 'OFF'}`, '')
     try {
       const payload = new Uint8Array([
         mode,
         (bitrate >> 24) & 0xff, (bitrate >> 16) & 0xff, (bitrate >> 8) & 0xff, bitrate & 0xff,
         fd, termination,
+        (fdBitrate >> 24) & 0xff, (fdBitrate >> 16) & 0xff, (fdBitrate >> 8) & 0xff, fdBitrate & 0xff,
       ])
       await window.deviceApi.sendCommand(CMD_CAN_CFG, Array.from(payload))
       setConfigured(true)
-      recordStep('CAN', 'config', { mode, bitrate, fd, termination })
+      recordStep('CAN', 'config', { mode, bitrate, fd, fdBitrate, termination })
       addRx('CFG OK', '')
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
@@ -184,6 +186,14 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
             <option value={1}>On</option>
           </select>
         </div>
+        {fd === 1 && (
+          <div className="pp-field">
+            <label>FD Rate</label>
+            <select value={fdBitrate} onChange={(e) => setFdBitrate(Number(e.target.value))}>
+              {BITRATES.map((r) => <option key={r} value={r}>{r >= 1e6 ? `${r / 1e6}Mbps` : `${r / 1000}kbps`}</option>)}
+            </select>
+          </div>
+        )}
         <div className="pp-field pp-field--sm">
           <label>Term</label>
           <select value={termination} onChange={(e) => setTermination(Number(e.target.value))}>

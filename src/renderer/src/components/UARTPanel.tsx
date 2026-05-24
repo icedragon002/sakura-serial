@@ -25,6 +25,7 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
   const [dataBits, setDataBits] = useState(8)
   const [stopBits, setStopBits] = useState(1)
   const [parity, setParity] = useState<string>('none')
+  const [flowControl, setFlowControl] = useState<string>('none')
   const [configured, setConfigured] = useState(false)
 
   const [input, setInput] = useState('')
@@ -71,24 +72,25 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
     if (!isConnected) return
     setBusy(true)
     const parMap: Record<string, number> = { none: 0, even: 1, odd: 2, mark: 3, space: 4 }
-    addTx(`CFG Port${port} ${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits}`, '')
+    const flowMap: Record<string, number> = { none: 0, rtscts: 1, xonxoff: 2 }
+    addTx(`CFG Port${port} ${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits} flow=${flowControl}`, '')
 
     try {
       const payload = new Uint8Array([
         port,
         (baud >> 24) & 0xff, (baud >> 16) & 0xff, (baud >> 8) & 0xff, baud & 0xff,
-        dataBits, parMap[parity] ?? 0, stopBits === 1.5 ? 1 : stopBits,
+        dataBits, parMap[parity] ?? 0, stopBits === 1.5 ? 1 : stopBits, flowMap[flowControl] ?? 0,
       ])
       await window.deviceApi.sendCommand(CMD_UART_CFG, Array.from(payload))
       setConfigured(true)
-      recordStep('UART', 'config', { port, baud, dataBits, parity, stopBits })
-      addRx('CFG OK', `${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits}`)
+      recordStep('UART', 'config', { port, baud, dataBits, parity, stopBits, flowControl })
+      addRx('CFG OK', `${baud} ${dataBits}${parity[0].toUpperCase()}${stopBits} flow=${flowControl}`)
     } catch (err: any) {
       addRx('CFG ERROR', err.message)
     } finally {
       setBusy(false)
     }
-  }, [isConnected, port, baud, dataBits, stopBits, parity, addTx, addRx])
+  }, [isConnected, port, baud, dataBits, stopBits, parity, flowControl, addTx, addRx])
 
   /* ── Send ───────────────────────────────────────── */
   const doSend = useCallback(() => {
@@ -216,6 +218,14 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
           <label>Stop</label>
           <select value={stopBits} onChange={(e) => setStopBits(Number(e.target.value))}>
             {STOP_BITS.map((s) => <option key={s} value={s}>{s}</option>)}
+          </select>
+        </div>
+        <div className="pp-field">
+          <label>Flow</label>
+          <select value={flowControl} onChange={(e) => setFlowControl(e.target.value)}>
+            <option value="none">None</option>
+            <option value="rtscts">RTS/CTS</option>
+            <option value="xonxoff">XON/XOFF</option>
           </select>
         </div>
         <button className="pp-btn pp-btn--scan" onClick={handleConfig} disabled={busy || !isConnected}>

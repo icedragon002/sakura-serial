@@ -28,6 +28,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
   const [vref, setVref] = useState(1) // 3.3V
   const [triggerMask, setTriggerMask] = useState(0)
   const [triggerVal, setTriggerVal] = useState(0)
+  const [triggerEdge, setTriggerEdge] = useState<'rising' | 'falling' | 'both'>('rising')
   const [preSamples, setPreSamples] = useState(4096)
   const [postSamples, setPostSamples] = useState(4096)
   const [streamMode, setStreamMode] = useState(0)
@@ -46,13 +47,18 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
   const handleConfig = useCallback(async () => {
     if (!isConnected) return
     setBusy(true)
+    // Compute trigger val from edge selection
+    let tVal = triggerVal
+    if (triggerEdge === 'rising') tVal = triggerMask
+    else if (triggerEdge === 'falling') tVal = 0
+    // 'both' uses triggerVal as-is for custom edge detection
     const chCount = [0, 1, 2, 3, 4, 5, 6, 7].filter((i) => channels & (1 << i)).length
-    addTx(`CFG ${chCount}ch ${sampleRateKHz}kHz vref=${VREFS.find((v) => v.value === vref)?.label}`, '')
+    addTx(`CFG ${chCount}ch ${sampleRateKHz}kHz ${triggerEdge} trigger=${triggerMask.toString(16)}`, '')
     try {
       const payload = new Uint8Array([
         channels,
         (sampleRateKHz >> 24) & 0xff, (sampleRateKHz >> 16) & 0xff, (sampleRateKHz >> 8) & 0xff, sampleRateKHz & 0xff,
-        triggerMask, triggerVal,
+        triggerMask, tVal,
         (preSamples >> 24) & 0xff, (preSamples >> 16) & 0xff, (preSamples >> 8) & 0xff, preSamples & 0xff,
         (postSamples >> 24) & 0xff, (postSamples >> 16) & 0xff, (postSamples >> 8) & 0xff, postSamples & 0xff,
         vref,
@@ -208,21 +214,20 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
             {VREFS.map((v) => <option key={v.value} value={v.value}>{v.label}</option>)}
           </select>
         </div>
+        <div className="pp-field">
+          <label>Edge</label>
+          <select value={triggerEdge} onChange={(e) => setTriggerEdge(e.target.value as 'rising' | 'falling' | 'both')}>
+            <option value="rising">↑ Rising</option>
+            <option value="falling">↓ Falling</option>
+            <option value="both">↕ Both</option>
+          </select>
+        </div>
         <div className="pp-field pp-field--sm">
-          <label>Trigger Mask</label>
+          <label>Mask</label>
           <input
             type="text"
             value={'0x' + triggerMask.toString(16).toUpperCase().padStart(2, '0')}
             onChange={(e) => setTriggerMask(parseInt(e.target.value.replace(/^0x/i, ''), 16) || 0)}
-            spellCheck={false}
-          />
-        </div>
-        <div className="pp-field pp-field--sm">
-          <label>Trigger Val</label>
-          <input
-            type="text"
-            value={'0x' + triggerVal.toString(16).toUpperCase().padStart(2, '0')}
-            onChange={(e) => setTriggerVal(parseInt(e.target.value.replace(/^0x/i, ''), 16) || 0)}
             spellCheck={false}
           />
         </div>
