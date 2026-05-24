@@ -137,6 +137,38 @@ export default function App() {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  /* ── Keyboard Shortcuts ── */
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'r') {
+        e.preventDefault()
+        if (isRecording()) {
+          const rec = stopRecording()
+          if (rec && rec.steps.length > 0) {
+            setMacroRecording(rec)
+            const code = generateScript(rec)
+            navigator.clipboard.writeText(code).catch(() => {})
+            setActiveTab('script')
+          }
+        } else {
+          startRecording()
+          setMacroRecording(null)
+        }
+      }
+      if (e.ctrlKey && e.key === 'l') {
+        e.preventDefault()
+        handleClearLog()
+      }
+      if (e.ctrlKey && e.key === '1') { e.preventDefault(); setActiveTab('dashboard') }
+      if (e.ctrlKey && e.key === '2') { e.preventDefault(); setActiveTab('i2c') }
+      if (e.ctrlKey && e.key === '3') { e.preventDefault(); setActiveTab('spi') }
+      if (e.ctrlKey && e.key === '4') { e.preventDefault(); setActiveTab('uart') }
+      if (e.ctrlKey && e.key === '5') { e.preventDefault(); setActiveTab('can') }
+    }
+    document.addEventListener('keydown', handler)
+    return () => document.removeEventListener('keydown', handler)
+  }, [handleClearLog])
+
   /* ── Status listener ── */
   useEffect(() => {
     const cleanup = window.deviceApi.onStatusChange((status, detail) => {

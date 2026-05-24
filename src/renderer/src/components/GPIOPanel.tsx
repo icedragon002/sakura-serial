@@ -27,7 +27,37 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
   const [pwmDuty, setPwmDuty] = useState(500) // per-mille
   const [readVal, setReadVal] = useState<number | null>(null)
   const [busy, setBusy] = useState(false)
+  const [monitoring, setMonitoring] = useState(false)
+  const monitorRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const [events, setEvents] = useState<string[]>([])
+
+  /* ── Monitor toggle ── */
+  const toggleMonitor = useCallback(() => {
+    if (monitoring) {
+      if (monitorRef.current) { clearInterval(monitorRef.current); monitorRef.current = null }
+      setMonitoring(false)
+      return
+    }
+    setMonitoring(true)
+    monitorRef.current = setInterval(async () => {
+      try {
+        const resp = await window.deviceApi.sendCommand(CMD_GPIO_READ, Array.from(new Uint8Array([pin])))
+        const v = resp.payload.length > 0 ? resp.payload[0] : 0
+        const ts = new Date().toLocaleTimeString('en-US', { hour12: false })
+        setEvents((prev) => {
+          const next = [...prev, `${ts} GPIO${pin}=${v}`]
+          return next.length > 30 ? next.slice(-30) : next
+        })
+        setReadVal(v)
+      } catch { /* poll silently fails */ }
+    }, 500)
+    // Cleanup on unmount
+    return () => { if (monitorRef.current) clearInterval(monitorRef.current) }
+  }, [monitoring, pin])
+
+  useEffect(() => {
+    return () => { if (monitorRef.current) clearInterval(monitorRef.current) }
+  }, [])
 
   /* ── Async event listener ── */
   useEffect(() => {
@@ -176,14 +206,30 @@ export default function GPIOPanel({ isConnected, onTransaction }: Props) {
 
       {/* Input mode */}
       {mode === 'in' && (
-        <div className="pp-row">
-          <button className="pp-btn pp-btn--read" onClick={handleRead} disabled={!isConnected}>Read</button>
-          {readVal !== null && (
-            <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: readVal ? 'var(--accent)' : 'var(--text-muted)' }}>
-              Value: {readVal}
-            </span>
+        <>
+          <div className="pp-row">
+            <button className="pp-btn pp-btn--read" onClick={handleRead} disabled={!isConnected}>Read</button>
+            <button
+              className={`pp-btn ${monitoring ? 'pp-btn--active' : ''}`}
+              onClick={toggleMonitor}
+              disabled={!isConnected}
+            >
+              {monitoring ? '⏹ Stop' : '▶ Monitor'}
+            </button>
+            {readVal !== null && (
+              <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: readVal ? 'var(--accent)' : 'var(--text-muted)' }}>
+                Value: {readVal}
+              </span>
+            )}
+          </div>
+          {events.length > 0 && (
+            <div className="can-log" style={{ maxHeight: 120, overflow: 'auto', marginTop: 4 }}>
+              {events.slice(-15).map((ev, i) => (
+                <div key={i} className="can-log-line" style={{ fontSize: 10 }}>{ev}</div>
+              ))}
+            </div>
           )}
-        </div>
+        </>
       )}
 
       {/* PWM mode */}

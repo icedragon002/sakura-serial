@@ -44,7 +44,14 @@ export default function TransactionLog({
   const [decoderName, setDecoderName] = useState<string>('')
   const [decodedResult, setDecodedResult] = useState<DecodeResult | null>(null)
   const [selectedEntryId, setSelectedEntryId] = useState<number | null>(null)
+  const [protocolFilter, setProtocolFilter] = useState<string>('')
   const decoders = getAllDecoders()
+
+  const filteredEntries = protocolFilter
+    ? entries.filter((e) => e.protocol === protocolFilter)
+    : entries
+
+  const protocols = [...new Set(entries.map((e) => e.protocol))].sort()
 
   const handleDecode = useCallback((entry: TransactionEntry) => {
     if (!entry.data) return
@@ -90,8 +97,16 @@ export default function TransactionLog({
           Auto-scroll
         </button>
         <div className="log-toolbar__spacer" />
+        <select
+          value={protocolFilter}
+          onChange={(e) => setProtocolFilter(e.target.value)}
+          style={{ fontSize: 11, padding: '2px 4px', background: 'var(--bg-card)', color: 'var(--text)', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}
+        >
+          <option value="">All</option>
+          {protocols.map((p) => <option key={p} value={p}>{p}</option>)}
+        </select>
         <span className="log-toolbar__counter">
-          {entries.length.toLocaleString()} entries
+          {filteredEntries.length.toLocaleString()}/{entries.length.toLocaleString()} entries
         </span>
         <select
           value={decoderName}
@@ -122,7 +137,7 @@ export default function TransactionLog({
 
       {/* Log Output */}
       <div className="log-output" ref={containerRef}>
-        {entries.length === 0 ? (
+        {filteredEntries.length === 0 ? (
           <div className="log-empty">
             <div className="log-empty__icon">⚡</div>
             <div className="log-empty__text">
@@ -130,7 +145,7 @@ export default function TransactionLog({
             </div>
           </div>
         ) : (
-          entries.map((entry) => (
+          filteredEntries.map((entry) => (
             <div className="log-line" key={entry.id}>
               {showTimestamp && (
                 <span className="log-line__time">{formatTime(entry.timestamp)}</span>

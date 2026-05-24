@@ -42,6 +42,8 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
   const [register, setRegister] = useState('0x00')
   const [readLen, setReadLen] = useState(8)
   const [writeData, setWriteData] = useState('')
+  const [writeReadData, setWriteReadData] = useState('')
+  const [writeReadLen, setWriteReadLen] = useState(8)
   const [scanResults, setScanResults] = useState<number[]>([])
   const [busy, setBusy] = useState(false)
   const [result, setResult] = useState('')
@@ -61,6 +63,30 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
   const addRx = (summary: string, data: string) => {
     onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'I2C', summary, data })
   }
+
+  /* ── Write + Read ────────────────────────────────── */
+  const handleWriteRead = useCallback(async () => {
+    if (!isConnected || !writeReadData.trim()) return
+    setBusy(true)
+    const addr = parseHex(deviceAddr)
+    const reg = parseHex(register)
+    const wrBytes = writeReadData.replace(/\s/g, '').match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? []
+    if (wrBytes.length === 0) { setBusy(false); return }
+    addTx(`WR+RD Ch${channel} ${hex(addr)} reg=${hex(reg)} wr=${writeReadData} rdLen=${writeReadLen}`, '')
+    try {
+      const payload = new Uint8Array([channel, addr, reg, wrBytes.length, ...wrBytes, (writeReadLen >> 8) & 0xff, writeReadLen & 0xff])
+      const resp = await window.deviceApi.sendCommand(CMD_I2C_WRITE_READ, Array.from(payload))
+      const hexData = Array.from(resp.payload).map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
+      addRx('WR+RD OK', hexData)
+      recordStep('I2C', 'writeRead', { channel, addr, reg, writeData: wrBytes, readLen: writeReadLen })
+      setResult(hexData)
+    } catch (err: any) {
+      addRx('WR+RD ERROR', err.message)
+      setResult(`Write+Read error: ${err.message}`)
+    } finally {
+      setBusy(false)
+    }
+  }, [isConnected, channel, deviceAddr, register, writeReadData, writeReadLen, addTx, addRx])
 
   /* ── Scan Bus ────────────────────────────────────── */
   const handleScan = useCallback(async () => {
@@ -248,6 +274,35 @@ export default function I2CPanel({ isConnected, onTransaction }: Props) {
           disabled={busy || !isConnected || !writeData.trim()}
         >
           Write
+        </button>
+      </div>
+
+      {/* Write+Read Row */}
+      <div className="pp-row">
+        <div className="pp-field" style={{ flex: 1 }}>
+          <label>Write Data (hex)</label>
+          <input
+            value={writeReadData}
+            onChange={(e) => setWriteReadData(e.target.value.replace(/[^0-9a-fA-F\s]/g, ''))}
+            placeholder="00 00"
+            spellCheck={false}
+          />
+        </div>
+        <div className="pp-field pp-field--sm">
+          <label>Rd Len</label>
+          <input
+            type="number"
+            value={writeReadLen}
+            onChange={(e) => setWriteReadLen(Math.max(1, Number(e.target.value)))}
+            min={1} max={255}
+          />
+        </div>
+        <button
+          className="pp-btn pp-btn--read"
+          onClick={handleWriteRead}
+          disabled={busy || !isConnected || !writeReadData.trim()}
+        >
+          Write+Read
         </button>
       </div>
 
