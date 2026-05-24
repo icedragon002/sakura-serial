@@ -1,5 +1,4 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
-import { useT } from '../i18n/I18nContext'
 
 interface Props {
   isConnected: boolean
@@ -9,208 +8,173 @@ interface Props {
   }) => void
 }
 
-interface BLEService {
+interface BleGattService {
   uuid: string
-  characteristics: BLEChar[]
+  characteristics: BleGattChar[]
 }
 
-interface BLEChar {
+interface BleGattChar {
   uuid: string
   properties: string[]
-  value?: Uint8Array
-  descriptor?: string
+  value?: number[]
+}
+
+interface BleDeviceInfo {
+  id: string
+  name: string
+  address: string
+  rssi: number
+  connectable: boolean
 }
 
 export default function BLEPanel({ onTransaction }: Props) {
-  const { t } = useT()
-  const [bleDevice, setBleDevice] = useState<BluetoothDevice | null>(null)
-  const [bleServer, setBleServer] = useState<BluetoothRemoteGATTServer | null>(null)
-  const [services, setServices] = useState<BLEService[]>([])
   const [scanning, setScanning] = useState(false)
+  const [devices, setDevices] = useState<BleDeviceInfo[]>([])
+  const [connected, setConnected] = useState(false)
+  const [services, setServices] = useState<BleGattService[]>([])
   const [selectedService, setSelectedService] = useState<string>('')
   const [selectedChar, setSelectedChar] = useState<string>('')
   const [charValue, setCharValue] = useState('')
   const [notifyLog, setNotifyLog] = useState<string[]>([])
   const [rssi, setRssi] = useState<number | null>(null)
-  const notifyRef = useRef<Map<string, BluetoothRemoteGATTCharacteristic>>(new Map())
+  const notifySubs = useRef<Set<string>>(new Set())
 
   const addTx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'BLE', summary: s, data: d })
   const addRx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'BLE', summary: s, data: d })
 
-  /* ── Hex helpers ── */
   const shortUuid = (uuid: string) => {
-    const base = '0000xxxx-0000-1000-8000-00805f9b34fb'
-    if (uuid.length === 4) return '0x' + uuid.toUpperCase()
     const m = uuid.match(/^0000([0-9a-f]{4})-0000-1000-8000-00805f9b34fb$/i)
-    return m ? '0x' + m[1].toUpperCase() : uuid.slice(0, 8) + '…'
+    return m ? '0x' + m[1].toUpperCase() : uuid.length > 10 ? uuid.slice(0, 8) + '…' : uuid
   }
 
   const propIcons: Record<string, string> = {
     read: '📖', write: '✍', writeWithoutResponse: '⚡',
-    notify: '🔔', indicate: '📢', broadcast: '📡',
+    notify: '🔔', indicate: '📢',
   }
 
   /* ── Scan ── */
   const handleScan = useCallback(async () => {
-    if (!(navigator as any).bluetooth) {
-      addRx('Web Bluetooth not available', '')
-      return
-    }
     setScanning(true)
-    addTx('BLE Scan', '')
-    try {
-      const device = await (navigator as any).bluetooth.requestDevice({
-        acceptAllDevices: true,
-        optionalServices: ['generic_access', 'device_information', 'battery_service',
-          '0000180a-0000-1000-8000-00805f9b34fb',
-          '6e400001-b5a3-f393-e0a9-e50e24dcca9e'],
-      }) as BluetoothDevice
-      setBleDevice(device)
-      addRx(`Found: ${device.name || 'Unknown'}`, device.id)
-      device.addEventListener('gattserverdisconnected', () => {
-        setBleDevice(null); setBleServer(null); setServices([])
-        addRx('Disconnected', '')
+    setDevices([])
+    addTx('BLE Scan (native)', '')
+
+    const cleanup = window.deviceApi.onBleDeviceFound((d) => {
+      setDevices((prev) => {
+        if (prev.find((p) => p.id === d.id)) return prev
+        return [...prev, d]
       })
+    })
+
+    try {
+      const found = await window.deviceApi.bleScan(5000)
+      setDevices(found)
+      addRx(`Found ${found.length} device(s)`, '')
     } catch (err: any) {
-      if (err.message !== 'User cancelled') {
-        addRx('Scan error: ' + err.message, '')
-      }
+      addRx('Scan error: ' + err.message, '')
     } finally {
+      cleanup()
       setScanning(false)
     }
   }, [addTx, addRx])
 
   /* ── Connect ── */
-  const handleConnect = useCallback(async () => {
-    if (!bleDevice) return
-    addTx(`Connect: ${bleDevice.name || 'Unknown'}`, '')
+  const handleConnect = useCallback(async (device: BleDeviceInfo) => {
+    addTx(`Connect: ${device.name} (${device.address})`, '')
     try {
-      const server = await bleDevice.gatt!.connect()
-      setBleServer(server)
+      await window.deviceApi.bleConnect(device.id)
+      setConnected(true)
       addRx('Connected', '')
 
-      // Read RSSI if available
       try {
-        const rssiVal = await (bleDevice as any).readRSSI?.()
-        setRssi(rssiVal)
-      } catch { /* RSSI not always supported */ }
+        const r = await window.deviceApi.bleRssi()
+        setRssi(r)
+      } catch { /* RSSI read may fail */ }
 
-      // Get all services
-      const svcs = await server.getPrimaryServices()
-      const svcList: BLEService[] = []
-      for (const svc of svcs) {
-        const chars = await svc.getCharacteristics()
-        svcList.push({
-          uuid: svc.uuid,
-          characteristics: chars.map((c) => ({
-            uuid: c.uuid,
-            properties: ['read', 'write', 'writeWithoutResponse', 'notify', 'indicate', 'broadcast']
-              .filter((p) => (c.properties as any)[p]),
-          })),
-        })
-      }
-      setServices(svcList)
-      addRx(`${svcList.length} services found`, '')
+      const svcs = await window.deviceApi.bleGetServices()
+      setServices(svcs)
+      addRx(`${svcs.length} services found`, '')
     } catch (err: any) {
       addRx('Connect error: ' + err.message, '')
     }
-  }, [bleDevice, addTx, addRx])
+  }, [addTx, addRx])
 
   /* ── Disconnect ── */
   const handleDisconnect = useCallback(async () => {
-    if (bleDevice?.gatt?.connected) {
-      bleDevice.gatt.disconnect()
-    }
-    // Cleanup all notify subscriptions
-    for (const [, char] of notifyRef.current) {
-      try { char.stopNotifications() } catch { /* ignore */ }
-    }
-    notifyRef.current.clear()
-    setBleServer(null)
+    try {
+      // Unsubscribe all
+      for (const key of notifySubs.current) {
+        const [svc, ch] = key.split('::')
+        await window.deviceApi.bleUnsubscribe(svc, ch).catch(() => {})
+      }
+      notifySubs.current.clear()
+      await window.deviceApi.bleDisconnect()
+    } catch { /* ignore */ }
+    setConnected(false)
     setServices([])
     setNotifyLog([])
     setRssi(null)
     addTx('Disconnected', '')
-  }, [bleDevice, addTx])
+  }, [addTx])
 
-  /* ── Read characteristic ── */
-  const handleReadChar = useCallback(async (svcUuid: string, charUuid: string) => {
-    if (!bleServer) return
+  /* ── Notify listener ── */
+  useEffect(() => {
+    const cleanup = window.deviceApi.onBleNotify((svcUuid, charUuid, data) => {
+      const hex = data.map((b) => b.toString(16).padStart(2, '0')).join(' ')
+      const ts = new Date().toLocaleTimeString('en-US', { hour12: false })
+      setNotifyLog((prev) => {
+        const next = [...prev, `${ts} ${shortUuid(charUuid)}: ${hex}`]
+        return next.length > 50 ? next.slice(-50) : next
+      })
+      addRx(`Notify ${shortUuid(charUuid)}`, hex)
+    })
+    return cleanup
+  }, [addRx])
+
+  /* ── GATT operations ── */
+  const handleRead = useCallback(async (svcUuid: string, charUuid: string) => {
     try {
-      const svc = await bleServer.getPrimaryService(svcUuid)
-      const char = await svc.getCharacteristic(charUuid)
-      const value = await char.readValue()
-      const bytes = new Uint8Array(value.buffer)
-      const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join(' ')
+      const data = await window.deviceApi.bleReadChar(svcUuid, charUuid)
+      const hex = data.map((b) => b.toString(16).padStart(2, '0')).join(' ')
       addTx(`Read ${shortUuid(charUuid)}`, '')
-      addRx(`Value: ${hex}`, bytes.length > 0 ? hex : '(empty)')
-      // Update local state
+      addRx(`Value: ${hex}`, '')
       setServices((prev) => prev.map((s) =>
         s.uuid === svcUuid ? {
           ...s, characteristics: s.characteristics.map((c) =>
-            c.uuid === charUuid ? { ...c, value: bytes } : c)
+            c.uuid === charUuid ? { ...c, value: data } : c)
         } : s
       ))
-    } catch (err: any) {
-      addRx('Read error: ' + err.message, '')
-    }
-  }, [bleServer, addTx, addRx])
+    } catch (err: any) { addRx('Read error: ' + err.message, '') }
+  }, [addTx, addRx])
 
-  /* ── Write characteristic ── */
-  const handleWriteChar = useCallback(async (svcUuid: string, charUuid: string, val: string) => {
-    if (!bleServer || !val.trim()) return
+  const handleWrite = useCallback(async (svcUuid: string, charUuid: string, val: string) => {
+    if (!val.trim()) return
+    const bytes = val.replace(/\s/g, '').match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? []
+    if (bytes.length === 0) return
     try {
-      const svc = await bleServer.getPrimaryService(svcUuid)
-      const char = await svc.getCharacteristic(charUuid)
-      const bytes = val.replace(/\s/g, '').match(/.{1,2}/g)?.map((b) => parseInt(b, 16)) ?? []
-      if (bytes.length === 0) return
       addTx(`Write ${shortUuid(charUuid)}: ${val}`, '')
-      await char.writeValue(new Uint8Array(bytes))
+      await window.deviceApi.bleWriteChar(svcUuid, charUuid, bytes)
       addRx('Write OK', `${bytes.length} bytes`)
-    } catch (err: any) {
-      addRx('Write error: ' + err.message, '')
-    }
-  }, [bleServer, addTx, addRx])
+    } catch (err: any) { addRx('Write error: ' + err.message, '') }
+  }, [addTx, addRx])
 
-  /* ── Notify subscribe ── */
   const handleToggleNotify = useCallback(async (svcUuid: string, charUuid: string) => {
-    if (!bleServer) return
+    const key = `${svcUuid}::${charUuid}`
     try {
-      const svc = await bleServer.getPrimaryService(svcUuid)
-      const char = await svc.getCharacteristic(charUuid)
-      const key = `${svcUuid}:${charUuid}`
-
-      if (notifyRef.current.has(key)) {
-        const existing = notifyRef.current.get(key)!
-        await existing.stopNotifications()
-        notifyRef.current.delete(key)
+      if (notifySubs.current.has(key)) {
+        await window.deviceApi.bleUnsubscribe(svcUuid, charUuid)
+        notifySubs.current.delete(key)
         addTx(`Unsubscribe ${shortUuid(charUuid)}`, '')
         addRx('Notifications stopped', '')
       } else {
-        await char.startNotifications()
-        char.addEventListener('characteristicvaluechanged', (event: Event) => {
-          const value = (event.target as BluetoothRemoteGATTCharacteristic).value
-          if (value) {
-            const bytes = new Uint8Array(value.buffer)
-            const hex = Array.from(bytes).map((b) => b.toString(16).padStart(2, '0')).join(' ')
-            const ts = new Date().toLocaleTimeString('en-US', { hour12: false })
-            setNotifyLog((prev) => {
-              const next = [...prev, `${ts} ${shortUuid(charUuid)}: ${hex}`]
-              return next.length > 50 ? next.slice(-50) : next
-            })
-            addRx(`Notify ${shortUuid(charUuid)}`, hex)
-          }
-        })
-        notifyRef.current.set(key, char)
+        await window.deviceApi.bleSubscribe(svcUuid, charUuid)
+        notifySubs.current.add(key)
         addTx(`Subscribe ${shortUuid(charUuid)}`, '')
         addRx('Notifications started', '')
       }
-    } catch (err: any) {
-      addRx('Subscribe error: ' + err.message, '')
-    }
-  }, [bleServer, addTx, addRx])
+    } catch (err: any) { addRx('Subscribe error: ' + err.message, '') }
+  }, [addTx, addRx])
 
   return (
     <div className="protocol-panel">
@@ -219,34 +183,46 @@ export default function BLEPanel({ onTransaction }: Props) {
         <span className="pp-title">BLE Explorer</span>
       </div>
 
-      {/* Scan + Connect */}
+      {/* Scan */}
       <div className="pp-row">
         <button className="pp-btn pp-btn--scan" onClick={handleScan} disabled={scanning}>
           {scanning ? 'Scanning…' : '📡 Scan'}
         </button>
-        {bleDevice && !bleServer && (
-          <button className="pp-btn pp-btn--read" onClick={handleConnect}>
-            Connect
-          </button>
+        {connected && (
+          <button className="pp-btn" onClick={handleDisconnect}>Disconnect</button>
         )}
-        {bleServer && (
-          <button className="pp-btn" onClick={handleDisconnect}>
-            Disconnect
-          </button>
-        )}
-        {bleDevice && (
-          <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: 'var(--accent)' }}>
-            {bleDevice.name || 'Unknown Device'}
-            {rssi !== null && ` (RSSI: ${rssi}dBm)`}
-          </span>
-        )}
+        <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 11, color: 'var(--text-muted)' }}>
+          {connected ? `Connected ${rssi !== null ? `(RSSI: ${rssi}dBm)` : ''}` : 'Native BLE — no browser picker'}
+        </span>
       </div>
+
+      {/* Device list */}
+      {!connected && devices.length > 0 && (
+        <div className="pp-field pp-field--grow">
+          <label>Devices ({devices.length})</label>
+          <div style={{ maxHeight: 300, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+            {devices.map((d) => (
+              <button
+                key={d.id}
+                className="pp-chip"
+                onClick={() => handleConnect(d)}
+                style={{ display: 'block', width: '100%', textAlign: 'left', borderRadius: 0, border: 'none', borderBottom: '1px solid var(--border-color)', padding: '6px 10px' }}
+              >
+                <strong>{d.name || 'Unknown'}</strong>
+                <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 8 }}>
+                  RSSI: {d.rssi}dBm · {d.address}
+                </span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* GATT Services */}
       {services.length > 0 && (
         <div className="pp-field pp-field--grow">
           <label>GATT Services ({services.length})</label>
-          <div style={{ maxHeight: 400, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
+          <div style={{ maxHeight: 300, overflow: 'auto', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)' }}>
             {services.map((svc) => (
               <div key={svc.uuid}>
                 <button
@@ -275,19 +251,14 @@ export default function BLEPanel({ onTransaction }: Props) {
 
                         {ch.value && (
                           <div style={{ fontSize: 10, color: 'var(--text-dim)', marginBottom: 4 }}>
-                            Value: {Array.from(ch.value).map((b) => b.toString(16).padStart(2, '0')).join(' ')}
+                            Value: {ch.value.map((b) => b.toString(16).padStart(2, '0')).join(' ')}
                           </div>
                         )}
 
                         <div style={{ display: 'flex', gap: 4 }}>
                           {ch.properties.includes('read') && (
-                            <button
-                              className="log-toolbar__btn"
-                              onClick={() => handleReadChar(svc.uuid, ch.uuid)}
-                              style={{ fontSize: 10, padding: '1px 6px' }}
-                            >
-                              R
-                            </button>
+                            <button className="log-toolbar__btn" onClick={() => handleRead(svc.uuid, ch.uuid)}
+                              style={{ fontSize: 10, padding: '1px 6px' }}>R</button>
                           )}
                           {(ch.properties.includes('write') || ch.properties.includes('writeWithoutResponse')) && (
                             <>
@@ -299,22 +270,17 @@ export default function BLEPanel({ onTransaction }: Props) {
                                 style={{ width: 80, fontSize: 10, padding: '1px 4px', fontFamily: 'var(--font-mono)' }}
                                 spellCheck={false}
                               />
-                              <button
-                                className="log-toolbar__btn"
-                                onClick={() => handleWriteChar(svc.uuid, ch.uuid, charValue)}
-                                style={{ fontSize: 10, padding: '1px 6px' }}
-                              >
-                                W
-                              </button>
+                              <button className="log-toolbar__btn" onClick={() => handleWrite(svc.uuid, ch.uuid, charValue)}
+                                style={{ fontSize: 10, padding: '1px 6px' }}>W</button>
                             </>
                           )}
                           {(ch.properties.includes('notify') || ch.properties.includes('indicate')) && (
                             <button
-                              className={`log-toolbar__btn ${notifyRef.current.has(`${svc.uuid}:${ch.uuid}`) ? 'log-toolbar__btn--active' : ''}`}
+                              className={`log-toolbar__btn ${notifySubs.current.has(`${svc.uuid}::${ch.uuid}`) ? 'log-toolbar__btn--active' : ''}`}
                               onClick={() => handleToggleNotify(svc.uuid, ch.uuid)}
                               style={{ fontSize: 10, padding: '1px 6px' }}
                             >
-                              {notifyRef.current.has(`${svc.uuid}:${ch.uuid}`) ? '⏹ N' : '▶ N'}
+                              {notifySubs.current.has(`${svc.uuid}::${ch.uuid}`) ? '⏹ N' : '▶ N'}
                             </button>
                           )}
                         </div>
@@ -341,9 +307,9 @@ export default function BLEPanel({ onTransaction }: Props) {
         </div>
       )}
 
-      {!bleDevice && (
+      {!connected && devices.length === 0 && (
         <div className="pp-placeholder">
-          Click 📡 Scan to open the Bluetooth device picker.
+          Click 📡 Scan to search for BLE devices via native Bluetooth.
         </div>
       )}
     </div>

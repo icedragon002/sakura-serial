@@ -18,6 +18,12 @@ import { UsbTransport, listUsbDevices } from './usb-transport'
 import { TcpTransport } from './tcp-transport'
 import { scanMdnsDevices, type MdnsDevice } from './mdns-discovery'
 import { autoUpdater } from 'electron-updater'
+import {
+  startBleScan, stopBleScan, connectBle, disconnectBle,
+  isBleConnected, discoverServices, readCharacteristic,
+  writeCharacteristic, subscribeCharacteristic, unsubscribeCharacteristic, readRssi,
+  type BleDevice,
+} from './ble-native'
 
 let mainWindow: BrowserWindow | null = null
 let session: Session | null = null
@@ -234,6 +240,62 @@ function registerIpcHandlers(): void {
       throw new Error('Device not connected')
     }
     return session.getDeviceInfo()
+  })
+
+  /* ── BLE (Native) ──────────────────────────────────── */
+  ipcMain.handle('ble:scan', async (_event, durationMs: number) => {
+    const devices: BleDevice[] = []
+    try {
+      await startBleScan((d) => {
+        devices.push(d)
+        mainWindow?.webContents.send('ble:device-found', d)
+      }, durationMs || 5000)
+    } catch (err) {
+      console.error('BLE scan failed:', err)
+    }
+    return devices
+  })
+
+  ipcMain.handle('ble:stop-scan', async () => {
+    stopBleScan()
+  })
+
+  ipcMain.handle('ble:connect', async (_event, deviceId: string) => {
+    await connectBle(deviceId)
+    mainWindow?.webContents.send('ble:status', 'connected')
+  })
+
+  ipcMain.handle('ble:disconnect', async () => {
+    await disconnectBle()
+    mainWindow?.webContents.send('ble:status', 'disconnected')
+  })
+
+  ipcMain.handle('ble:is-connected', async () => isBleConnected())
+
+  ipcMain.handle('ble:services', async () => {
+    return discoverServices()
+  })
+
+  ipcMain.handle('ble:read', async (_event, svcUuid: string, charUuid: string) => {
+    return readCharacteristic(svcUuid, charUuid)
+  })
+
+  ipcMain.handle('ble:write', async (_event, svcUuid: string, charUuid: string, data: number[], woResp: boolean) => {
+    await writeCharacteristic(svcUuid, charUuid, data, woResp)
+  })
+
+  ipcMain.handle('ble:subscribe', async (_event, svcUuid: string, charUuid: string) => {
+    await subscribeCharacteristic(svcUuid, charUuid, (data) => {
+      mainWindow?.webContents.send('ble:notify', svcUuid, charUuid, Array.from(data))
+    })
+  })
+
+  ipcMain.handle('ble:unsubscribe', async (_event, svcUuid: string, charUuid: string) => {
+    await unsubscribeCharacteristic(svcUuid, charUuid)
+  })
+
+  ipcMain.handle('ble:rssi', async () => {
+    return readRssi()
   })
 
   /* ── Window Controls ──────────────────────────────── */

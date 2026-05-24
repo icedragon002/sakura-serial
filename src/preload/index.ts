@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import type { DeviceInfo, TransportConfig, ParsedFrame, DeviceSysInfo } from '../shared/transport'
+import type { BleDevice } from '../main/ble-native'
 
 /**
  * probe-station 桌面应用 preload 桥接
@@ -15,6 +16,17 @@ const VALID_CHANNELS = [
   'device:send',
   'device:is-open',
   'device:get-info',
+  'ble:scan',
+  'ble:stop-scan',
+  'ble:connect',
+  'ble:disconnect',
+  'ble:is-connected',
+  'ble:services',
+  'ble:read',
+  'ble:write',
+  'ble:subscribe',
+  'ble:unsubscribe',
+  'ble:rssi',
 ] as const
 
 const validChannels = (channel: string): channel is (typeof VALID_CHANNELS)[number] =>
@@ -52,6 +64,38 @@ const api = {
       callback(eventType, payload)
     ipcRenderer.on('device:async-event', listener)
     return () => ipcRenderer.removeListener('device:async-event', listener)
+  },
+
+  /* ── BLE native operations ── */
+  bleScan: (durationMs?: number) => invoke<BleDevice[]>('ble:scan', durationMs),
+  bleStopScan: () => invoke<void>('ble:stop-scan'),
+  bleConnect: (deviceId: string) => invoke<void>('ble:connect', deviceId),
+  bleDisconnect: () => invoke<void>('ble:disconnect'),
+  bleIsConnected: () => invoke<boolean>('ble:is-connected'),
+  bleGetServices: () => invoke<any[]>('ble:services'),
+  bleReadChar: (svcUuid: string, charUuid: string) => invoke<number[]>('ble:read', svcUuid, charUuid),
+  bleWriteChar: (svcUuid: string, charUuid: string, data: number[], woResp?: boolean) => invoke<void>('ble:write', svcUuid, charUuid, data, woResp),
+  bleSubscribe: (svcUuid: string, charUuid: string) => invoke<void>('ble:subscribe', svcUuid, charUuid),
+  bleUnsubscribe: (svcUuid: string, charUuid: string) => invoke<void>('ble:unsubscribe', svcUuid, charUuid),
+  bleRssi: () => invoke<number>('ble:rssi'),
+
+  onBleDeviceFound: (callback: (device: BleDevice) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, device: BleDevice) => callback(device)
+    ipcRenderer.on('ble:device-found', listener)
+    return () => ipcRenderer.removeListener('ble:device-found', listener)
+  },
+
+  onBleStatus: (callback: (status: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, status: string) => callback(status)
+    ipcRenderer.on('ble:status', listener)
+    return () => ipcRenderer.removeListener('ble:status', listener)
+  },
+
+  onBleNotify: (callback: (svcUuid: string, charUuid: string, data: number[]) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, svcUuid: string, charUuid: string, data: number[]) =>
+      callback(svcUuid, charUuid, data)
+    ipcRenderer.on('ble:notify', listener)
+    return () => ipcRenderer.removeListener('ble:notify', listener)
   },
 
   /** Connection status changes */

@@ -1,8 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
-import Editor from '@monaco-editor/react'
 import { createScriptDevice } from '../script-api'
 import { useT } from '../i18n/I18nContext'
-import { scriptExamples, getExampleByName, type ScriptExample } from '../script-examples'
+import { scriptExamples, type ScriptExample } from '../script-examples'
 import { generateScript, stopRecording, isRecording } from '../macro-recorder'
 import { getWorkerBlobUrl } from '../script.worker'
 
@@ -247,26 +246,28 @@ export default function ScriptPanel({ isConnected, onTransaction }: Props) {
         </div>
       )}
 
-      {/* Monaco Editor */}
+      {/* Code Editor */}
       <div className="pp-field pp-field--grow">
         <label>Script (JavaScript)</label>
-        <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden' }}>
-          <Editor
-            height="300px"
-            language="javascript"
-            theme="vs-dark"
+        <div style={{ border: '1px solid var(--border-color)', borderRadius: 'var(--radius-sm)', overflow: 'hidden', position: 'relative' }}>
+          <textarea
             value={code}
-            onChange={handleCodeChange}
-            options={{
-              minimap: { enabled: false },
+            onChange={(e) => handleCodeChange(e.target.value)}
+            spellCheck={false}
+            style={{
+              width: '100%',
+              height: 300,
+              background: '#1e1e1e',
+              color: '#d4d4d4',
+              border: 'none',
+              padding: '12px 16px',
+              fontFamily: 'var(--font-mono), Consolas, monospace',
               fontSize: 13,
-              fontFamily: 'var(--font-mono, monospace)',
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-              automaticLayout: true,
+              lineHeight: 1.6,
               tabSize: 2,
-              wordWrap: 'on',
-              padding: { top: 8 },
+              resize: 'vertical',
+              outline: 'none',
+              whiteSpace: 'pre',
             }}
           />
         </div>
