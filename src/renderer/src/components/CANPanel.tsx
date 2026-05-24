@@ -89,7 +89,7 @@ export default function CANPanel({ isConnected, onTransaction }: Props) {
         const frame: CanFrame = { id, ide, dlc, data, timestamp: Date.now() }
         setFrames((prev) => {
           const next = [...prev, frame]
-          return next.length > 200 ? next.slice(-200) : next
+          return next.length > 500 ? next.slice(-500) : next
         })
         const hex = data.map((b) => b.toString(16).toUpperCase().padStart(2, '0')).join(' ')
         addRx(`CAN RX ID=${id.toString(16).toUpperCase()} DLC=${dlc}`, hex)

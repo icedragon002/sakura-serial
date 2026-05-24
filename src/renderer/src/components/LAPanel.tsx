@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { CMD_LA_CFG, CMD_LA_START, CMD_LA_STOP, CMD_LA_STATUS, CMD_LA_STREAM_MODE, CMD_LA_DATA } from '../../../shared/commands'
 import { useT } from '../i18n/I18nContext'
 import WaveformViewer, { type WaveformChannel } from './WaveformViewer'
@@ -35,6 +35,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
   const [busy, setBusy] = useState(false)
   const [capturedChannels, setCapturedChannels] = useState<WaveformChannel[]>([])
   const [triggerSample, setTriggerSample] = useState<number | undefined>()
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const addTx = (s: string, d: string) =>
     onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'LA', summary: s, data: d })
@@ -76,6 +77,16 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
       setStatus('triggered')
       recordStep('LA', 'start', {})
       addRx('SAMPLING', '')
+      // Poll for completion
+      if (pollRef.current) clearInterval(pollRef.current)
+      const poll = setInterval(async () => {
+        try {
+          const resp = await window.deviceApi.sendCommand(CMD_LA_STATUS, [])
+          const s = resp.payload.length > 0 ? resp.payload[0] : 0
+          if (s === 3) { clearInterval(poll); pollRef.current = null; setStatus('done') }
+        } catch { clearInterval(poll); pollRef.current = null }
+      }, 500)
+      pollRef.current = poll
     } catch (err: any) {
       addRx('START ERROR', err.message)
     }
@@ -84,6 +95,7 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
   const handleStop = useCallback(async () => {
     if (!isConnected) return
     addTx('STOP', '')
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null }
     try {
       await window.deviceApi.sendCommand(CMD_LA_STOP, [])
       setStatus('done')
