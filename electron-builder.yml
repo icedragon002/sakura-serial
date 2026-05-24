@@ -1,5 +1,5 @@
-appId: com.probestation.desktop
-productName: probe-station
+appId: com.sakuraserial.desktop
+productName: sakura-serial
 directories:
   buildResources: resources
   output: dist
@@ -10,7 +10,7 @@ files:
   - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,README.md}'
   - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
 win:
-  executableName: probe-station
+  executableName: sakura-serial
   target:
     - nsis
   icon: resources/icon.ico
@@ -18,8 +18,8 @@ win:
   signAndEditExecutable: false
 nsis:
   artifactName: ${name}-${version}-setup.${ext}
-  shortcutName: probe-station
-  uninstallDisplayName: probe-station
+  shortcutName: sakura-serial
+  uninstallDisplayName: sakura-serial
   oneClick: false
   allowToChangeInstallationDirectory: true
   createDesktopShortcut: true

@@ -1,7 +1,7 @@
 {
   "name": "sakura-serial",
   "version": "2.0.0",
-  "description": "⚡ probe-station Desktop — Universal Protocol Debugger (I2C/SPI/UART/CAN/1-Wire/GPIO/LA)",
+  "description": "🌸 Sakura Serial — Universal Protocol Debugger (I2C/SPI/UART/CAN/1-Wire/GPIO/LA/BLE)",
   "main": "./out/main/index.js",
   "author": "icedragon002",
   "license": "MIT",

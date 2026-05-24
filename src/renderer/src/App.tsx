@@ -1,5 +1,5 @@
 /**
- * probe-station 桌面应用 — React 主组件
+ * Sakura Serial 桌面应用 — React 主组件
  *
  * 布局:
  *   - 顶部: 自定义标题栏 (无框窗口)
@@ -291,10 +291,10 @@ export default function App() {
             `"${new Date(e.timestamp).toISOString()}","${e.direction}","${e.protocol}","${e.summary}","${e.data}"`
         )
         content = [header, ...rows].join('\n')
-        filename = `probe-station-log-${ts}.csv`
+        filename = `sakura-serial-log-${ts}.csv`
       } else {
         content = JSON.stringify(entries, null, 2)
-        filename = `probe-station-log-${ts}.json`
+        filename = `sakura-serial-log-${ts}.json`
       }
 
       const blob = new Blob([content], { type: format === 'csv' ? 'text/csv' : 'application/json' })
@@ -332,7 +332,7 @@ export default function App() {
         } else {
           info = await window.deviceApi.getDeviceInfo()
         }
-        setDeviceName(info.firmwareVersion || info.deviceName || 'probe-station')
+        setDeviceName(info.firmwareVersion || info.deviceName || 'sakura-serial')
         setDeviceInfo({
           firmwareVersion: info.firmwareVersion || 'unknown',
           supportedProtocols: info.supportedProtocols || [],
@@ -348,7 +348,7 @@ export default function App() {
           data: '',
         })
       } catch {
-        setDeviceName('probe-station')
+        setDeviceName('sakura-serial')
         setDeviceInfo({ firmwareVersion: 'unknown', supportedProtocols: [], transportType: config.type.toUpperCase(), vrefChannels: {}, sramUsage: 0 })
         addEntry({
           timestamp: Date.now(),
@@ -391,7 +391,7 @@ export default function App() {
       <div className="title-bar">
         <div className="title-bar__left">
           <span className="title-bar__icon">⚡</span>
-          <span className="title-bar__text">probe-station</span>
+          <span className="title-bar__text">🌸 Sakura Serial</span>
         </div>
         <div className="title-bar__controls">
           <SettingsButton
@@ -538,7 +538,7 @@ export default function App() {
         <span className={`status-bar__dot ${isConnected ? 'status-bar__dot--connected' : ''}`} />
         <span className="status-bar__text">
           {isConnected
-            ? `Connected (${deviceName || 'probe-station'})`
+            ? `Connected (${deviceName || 'sakura-serial'})`
             : 'Disconnected'}
         </span>
         <span className="status-bar__spacer" />

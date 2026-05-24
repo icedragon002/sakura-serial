@@ -3,7 +3,7 @@ export type Lang = 'zh' | 'en'
 export const translations: Record<Lang, Record<string, string>> = {
   zh: {
     /* ── App ── */
-    'app.title': 'probe-station',
+    'app.title': 'Sakura Serial',
 
     /* ── Window Controls ── */
     'win.minimize': '最小化',
@@ -296,7 +296,7 @@ export const translations: Record<Lang, Record<string, string>> = {
 
   en: {
     /* ── App ── */
-    'app.title': 'probe-station',
+    'app.title': 'Sakura Serial',
 
     /* ── Window Controls ── */
     'win.minimize': 'Minimize',

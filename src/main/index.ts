@@ -32,7 +32,7 @@ function createWindow(): void {
     frame: false,
     titleBarStyle: 'hidden',
     backgroundColor: '#1a1230',
-    title: 'probe-station',
+    title: 'Sakura Serial',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
@@ -59,7 +59,7 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  electronApp.setAppUserModelId('com.probestation.desktop')
+  electronApp.setAppUserModelId('com.sakuraserial.desktop')
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)

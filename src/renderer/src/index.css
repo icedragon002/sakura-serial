@@ -1,5 +1,5 @@
 /* ═══════════════════════════════════════════════════════════════════
-   ⚡ probe-station — Multi-Theme Styles (sakura / light / dark)
+   🌸 Sakura Serial — Multi-Theme Styles (sakura / light / dark)
    ═══════════════════════════════════════════════════════════════════ */
 
 /* ── Default: Sakura ── */
@@ -31,7 +31,7 @@
   --radius-lg: 14px;
   --glow-primary: 0 0 14px var(--primary-glow);
   --glow-accent: 0 0 12px rgba(0, 229, 160, 0.2);
-  --font-ui: 'Quicksand', 'Segoe UI', system-ui, sans-serif;
+  --font-ui: 'Segoe UI', system-ui, -apple-system, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
 
   --select-chevron: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%239d8dc0' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
