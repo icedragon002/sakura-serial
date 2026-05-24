@@ -249,6 +249,13 @@ export default function UARTPanel({ isConnected, onTransaction }: Props) {
 
       {configured && (
         <>
+          {/* Config Summary */}
+          <div className="pp-row" style={{ fontSize: 11, color: 'var(--accent)', fontFamily: 'var(--font-mono)', padding: '4px 0' }}>
+            {baud} {dataBits}{parity === 'none' ? 'N' : parity[0].toUpperCase()}{stopBits === 1.5 ? '1.5' : stopBits}
+            {flowControl !== 'none' && ` flow:${flowControl}`}
+            {' '}✓
+          </div>
+
           {/* Send Row */}
           <div className="pp-row">
             <div className="pp-field pp-field--grow">

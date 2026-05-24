@@ -283,6 +283,14 @@ export default function LAPanel({ isConnected, onTransaction }: Props) {
         <div className="pp-placeholder" style={{ padding: '20px', textAlign: 'left' }}>
           <p>{t('la.noData')}</p>
           <p style={{ marginTop: 8, fontSize: 11, color: 'var(--text-muted)' }}>
+            {(() => {
+              const activeChs = [0,1,2,3,4,5,6,7].filter(i => channels & (1 << i)).length || 1
+              const maxSamples = Math.floor(32768 / activeChs)
+              const durationUs = (maxSamples / (sampleRateKHz * 1000)) * 1_000_000
+              return `${activeChs}ch @ ${sampleRateKHz >= 1000 ? sampleRateKHz/1000 + 'MHz' : sampleRateKHz + 'kHz'}: ~${maxSamples.toLocaleString()} samples/ch (${durationUs < 1000 ? durationUs.toFixed(0) + 'µs' : (durationUs/1000).toFixed(1) + 'ms'} capture window)`
+            })()}
+          </p>
+          <p style={{ marginTop: 4, fontSize: 11, color: 'var(--text-muted)' }}>
             {t('la.streamHint')}
           </p>
         </div>

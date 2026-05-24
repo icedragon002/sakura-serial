@@ -138,6 +138,15 @@ export default function ScriptPanel({ isConnected, onTransaction }: Props) {
 
   const handleRun = useCallback(async () => {
     if (!isConnected) return
+
+    // Syntax validation
+    try {
+      new Function(code)
+    } catch (err: any) {
+      setOutput('Syntax error: ' + err.message)
+      return
+    }
+
     setRunning(true)
     setOutput('')
 
