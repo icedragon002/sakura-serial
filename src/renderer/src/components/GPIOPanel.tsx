@@ -1,0 +1,179 @@
+import { useState, useCallback } from 'react'
+import { CMD_GPIO_CFG, CMD_GPIO_WRITE, CMD_GPIO_READ, CMD_GPIO_PWM } from '../../../shared/commands'
+
+interface Props {
+  isConnected: boolean
+  onTransaction: (entry: {
+    timestamp: number; direction: 'tx' | 'rx'; protocol: string
+    summary: string; data: string
+  }) => void
+}
+
+type GpioMode = 'in' | 'out' | 'pwm' | 'freq'
+type GpioPull = 'none' | 'up' | 'down'
+
+const MODE_MAP: Record<GpioMode, number> = { in: 0, out: 1, pwm: 2, freq: 3 }
+const PULL_MAP: Record<GpioPull, number> = { none: 0, up: 1, down: 2 }
+
+export default function GPIOPanel({ isConnected, onTransaction }: Props) {
+  const [pin, setPin] = useState(0)
+  const [mode, setMode] = useState<GpioMode>('out')
+  const [pull, setPull] = useState<GpioPull>('none')
+  const [outputVal, setOutputVal] = useState(0)
+  const [pwmFreq, setPwmFreq] = useState(1000)
+  const [pwmDuty, setPwmDuty] = useState(500) // per-mille
+  const [readVal, setReadVal] = useState<number | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const addTx = (s: string, d: string) =>
+    onTransaction({ timestamp: Date.now(), direction: 'tx', protocol: 'GPIO', summary: s, data: d })
+  const addRx = (s: string, d: string) =>
+    onTransaction({ timestamp: Date.now(), direction: 'rx', protocol: 'GPIO', summary: s, data: d })
+
+  /* ── Config ─────────────────────────────────────── */
+  const handleConfig = useCallback(async () => {
+    if (!isConnected) return
+    const modeName = mode.toUpperCase()
+    addTx(`CFG Pin${pin} ${modeName} PULL=${pull}`, '')
+    try {
+      await window.deviceApi.sendCommand(
+        CMD_GPIO_CFG,
+        Array.from(new Uint8Array([pin, MODE_MAP[mode], PULL_MAP[pull]]))
+      )
+      addRx('CFG OK', '')
+    } catch (err: any) {
+      addRx('CFG ERROR', err.message)
+    }
+  }, [isConnected, pin, mode, pull, addTx, addRx])
+
+  /* ── Write ──────────────────────────────────────── */
+  const handleWrite = useCallback(async (val: number) => {
+    if (!isConnected) return
+    addTx(`WRITE Pin${pin} → ${val}`, '')
+    try {
+      await window.deviceApi.sendCommand(CMD_GPIO_WRITE, Array.from(new Uint8Array([pin, val])))
+      setOutputVal(val)
+      addRx('WRITE OK', String(val))
+    } catch (err: any) {
+      addRx('WRITE ERROR', err.message)
+    }
+  }, [isConnected, pin, addTx, addRx])
+
+  /* ── Read ───────────────────────────────────────── */
+  const handleRead = useCallback(async () => {
+    if (!isConnected) return
+    try {
+      const resp = await window.deviceApi.sendCommand(CMD_GPIO_READ, Array.from(new Uint8Array([pin])))
+      const val = resp.payload.length > 0 ? resp.payload[0] : 0
+      setReadVal(val)
+      addRx(`READ Pin${pin}`, String(val))
+    } catch (err: any) {
+      addRx('READ ERROR', err.message)
+    }
+  }, [isConnected, pin, addRx])
+
+  /* ── PWM ────────────────────────────────────────── */
+  const handlePwm = useCallback(async () => {
+    if (!isConnected) return
+    addTx(`PWM Pin${pin} ${pwmFreq}Hz Duty=${(pwmDuty / 10).toFixed(1)}%`, '')
+    try {
+      const payload = new Uint8Array([
+        pin,
+        (pwmFreq >> 24) & 0xff, (pwmFreq >> 16) & 0xff, (pwmFreq >> 8) & 0xff, pwmFreq & 0xff,
+        (pwmDuty >> 8) & 0xff, pwmDuty & 0xff,
+      ])
+      await window.deviceApi.sendCommand(CMD_GPIO_PWM, Array.from(payload))
+      addRx('PWM OK', `${pwmFreq}Hz ${(pwmDuty / 10).toFixed(1)}%`)
+    } catch (err: any) {
+      addRx('PWM ERROR', err.message)
+    }
+  }, [isConnected, pin, pwmFreq, pwmDuty, addTx, addRx])
+
+  return (
+    <div className="protocol-panel">
+      <div className="pp-header">
+        <span className="pp-icon">🔌</span>
+        <span className="pp-title">GPIO</span>
+      </div>
+
+      {/* Pin + Mode + Pull + Config */}
+      <div className="pp-row">
+        <div className="pp-field pp-field--sm">
+          <label>Pin</label>
+          <select value={pin} onChange={(e) => setPin(Number(e.target.value))}>
+            {Array.from({ length: 8 }, (_, i) => <option key={i} value={i}>GPIO{i}</option>)}
+          </select>
+        </div>
+        <div className="pp-field">
+          <label>Mode</label>
+          <select value={mode} onChange={(e) => setMode(e.target.value as GpioMode)}>
+            <option value="in">Input</option>
+            <option value="out">Output</option>
+            <option value="pwm">PWM</option>
+            <option value="freq">Freq</option>
+          </select>
+        </div>
+        <div className="pp-field">
+          <label>Pull</label>
+          <select value={pull} onChange={(e) => setPull(e.target.value as GpioPull)}>
+            <option value="none">None</option>
+            <option value="up">Up</option>
+            <option value="down">Down</option>
+          </select>
+        </div>
+        <button className="pp-btn pp-btn--scan" onClick={handleConfig} disabled={!isConnected}>Apply</button>
+      </div>
+
+      {/* Output mode */}
+      {mode === 'out' && (
+        <div className="pp-row">
+          <button className="pp-btn pp-btn--read" onClick={() => handleWrite(1)} disabled={!isConnected}>
+            Set HIGH
+          </button>
+          <button className="pp-btn" onClick={() => handleWrite(0)} disabled={!isConnected}>
+            Set LOW
+          </button>
+          {outputVal !== null && (
+            <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: outputVal ? 'var(--accent)' : 'var(--text-muted)' }}>
+              {outputVal ? 'HIGH' : 'LOW'}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* Input mode */}
+      {mode === 'in' && (
+        <div className="pp-row">
+          <button className="pp-btn pp-btn--read" onClick={handleRead} disabled={!isConnected}>Read</button>
+          {readVal !== null && (
+            <span className="pp-hint" style={{ alignSelf: 'center', fontSize: 12, color: readVal ? 'var(--accent)' : 'var(--text-muted)' }}>
+              Value: {readVal}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* PWM mode */}
+      {mode === 'pwm' && (
+        <>
+          <div className="pp-row">
+            <div className="pp-field">
+              <label>Freq (Hz)</label>
+              <input type="number" value={pwmFreq} onChange={(e) => setPwmFreq(Math.max(1, Number(e.target.value)))} min={1} />
+            </div>
+            <div className="pp-field">
+              <label>Duty (0-100%)</label>
+              <input
+                type="number"
+                value={Math.round(pwmDuty / 10)}
+                onChange={(e) => setPwmDuty(Math.min(1000, Math.max(0, Number(e.target.value) * 10)))}
+                min={0} max={100}
+              />
+            </div>
+            <button className="pp-btn pp-btn--write" onClick={handlePwm} disabled={!isConnected}>Set PWM</button>
+          </div>
+        </>
+      )}
+    </div>
+  )
+}

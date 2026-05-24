@@ -1,7 +1,7 @@
-import type { SerialApi } from '../../preload/index'
+import type { DeviceApi } from '../../preload/index'
 
 declare global {
   interface Window {
-    api: SerialApi
+    deviceApi: DeviceApi
   }
 }

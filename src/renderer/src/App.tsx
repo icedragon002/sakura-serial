@@ -1,71 +1,114 @@
+/**
+ * probe-station 桌面应用 — React 主组件
+ *
+ * 布局:
+ *   - 顶部: 自定义标题栏 (无框窗口)
+ *   - 左侧: 连接管理器侧边栏 (USB/WiFi/BLE)
+ *   - 中部: 8 个协议面板 Tab 切换 (I2C/SPI/UART/CAN/1-Wire/GPIO/LA/Script)
+ *   - 底部: 事务日志 + 导出
+ *   - 状态栏: 连接状态 + 收发计数
+ */
+
 import { useState, useCallback, useEffect, useRef } from 'react'
-import type { SerialPortInfo, SerialConfig, SerialData } from '../../preload/index'
-import { useT } from './i18n/I18nContext'
-import PortConfig from './components/PortConfig'
-import Terminal from './components/Terminal'
-import SendPanel from './components/SendPanel'
-import StatusBar from './components/StatusBar'
+import type { TransportConfig } from '../../shared/transport'
+import ConnectionManager from './components/ConnectionManager'
+import TransactionLog from './components/TransactionLog'
+import type { TransactionEntry } from './components/TransactionLog'
+import I2CPanel from './components/I2CPanel'
+import SPIPanel from './components/SPIPanel'
+import UARTPanel from './components/UARTPanel'
+import CANPanel from './components/CANPanel'
+import OneWirePanel from './components/OneWirePanel'
+import GPIOPanel from './components/GPIOPanel'
+import LAPanel from './components/LAPanel'
+import ScriptPanel from './components/ScriptPanel'
 import SakuraParticles from './components/SakuraParticles'
 import Mascot from './components/Mascot'
 import SettingsButton from './components/SettingsButton'
 import type { Theme } from './components/SettingsButton'
 
-export interface TerminalEntry {
-  id: number
-  timestamp: number
-  direction: 'tx' | 'rx'
-  data: string
-  hex: string
-}
+/* ── Tabs ─────────────────────────────────────────── */
+type PanelTab =
+  | 'i2c'
+  | 'spi'
+  | 'uart'
+  | 'can'
+  | 'onewire'
+  | 'gpio'
+  | 'la'
+  | 'script'
 
+const TABS: { key: PanelTab; label: string; icon: string }[] = [
+  { key: 'i2c', label: 'I²C', icon: '🔌' },
+  { key: 'spi', label: 'SPI', icon: '⚡' },
+  { key: 'uart', label: 'UART', icon: '📡' },
+  { key: 'can', label: 'CAN', icon: '🚗' },
+  { key: 'onewire', label: '1-Wire', icon: '🌡' },
+  { key: 'gpio', label: 'GPIO', icon: '🔌' },
+  { key: 'la', label: 'LA', icon: '📊' },
+  { key: 'script', label: 'Script', icon: '📜' },
+]
+
+/* ── Constants ────────────────────────────────────── */
 const MAX_ENTRIES = 5000
-const DEFAULT_SIDEBAR_WIDTH = 250
-const MIN_SIDEBAR_WIDTH = 200
-const MAX_SIDEBAR_WIDTH = 400
+const DEFAULT_SIDEBAR_WIDTH = 260
+const MIN_SIDEBAR_WIDTH = 220
+const MAX_SIDEBAR_WIDTH = 380
 
 function loadBool(key: string, fallback: boolean): boolean {
   try {
     const v = localStorage.getItem(key)
     return v !== null ? v === '1' : fallback
-  } catch { return fallback }
+  } catch {
+    return fallback
+  }
 }
 
 function saveBool(key: string, v: boolean) {
-  try { localStorage.setItem(key, v ? '1' : '0') } catch { /* noop */ }
+  try {
+    localStorage.setItem(key, v ? '1' : '0')
+  } catch {
+    /* noop */
+  }
 }
 
 function loadStr(key: string, fallback: string): string {
-  try { return localStorage.getItem(key) || fallback } catch { return fallback }
+  try {
+    return localStorage.getItem(key) || fallback
+  } catch {
+    return fallback
+  }
 }
 
 function saveStr(key: string, v: string) {
-  try { localStorage.setItem(key, v) } catch { /* noop */ }
+  try {
+    localStorage.setItem(key, v)
+  } catch {
+    /* noop */
+  }
 }
 
 export default function App() {
-  const { t } = useT()
+  /* ── Device State ── */
+  const [isConnected, setIsConnected] = useState(false)
+  const [deviceName, setDeviceName] = useState('')
+  const [deviceInfo, setDeviceInfo] = useState<{
+    firmwareVersion: string
+    supportedProtocols: number[]
+    transportType: string
+  } | null>(null)
 
-  // ── Serial State ──
-  const [ports, setPorts] = useState<SerialPortInfo[]>([])
-  const [selectedPort, setSelectedPort] = useState('')
-  const [baudRate, setBaudRate] = useState(115200)
-  const [dataBits, setDataBits] = useState<5 | 6 | 7 | 8>(8)
-  const [stopBits, setStopBits] = useState<1 | 1.5 | 2>(1)
-  const [parity, setParity] = useState<'none' | 'even' | 'odd' | 'mark' | 'space'>('none')
-  const [flowControl, setFlowControl] = useState<'none' | 'rtscts' | 'xon/xoff'>('none')
-  const [isOpen, setIsOpen] = useState(false)
-  const [dtr, setDtr] = useState(false)
-  const [rts, setRts] = useState(false)
-
-  // ── Terminal State ──
-  const [entries, setEntries] = useState<TerminalEntry[]>([])
-  const [showHex, setShowHex] = useState(false)
+  /* ── Transaction Log ── */
+  const [entries, setEntries] = useState<TransactionEntry[]>([])
   const [showTimestamp, setShowTimestamp] = useState(true)
   const [autoScroll, setAutoScroll] = useState(true)
   const [txCount, setTxCount] = useState(0)
   const [rxCount, setRxCount] = useState(0)
 
-  // ── UI State ──
+  /* ── Active Panel ── */
+  const [activeTab, setActiveTab] = useState<PanelTab>('i2c')
+
+  /* ── UI State ── */
   const [theme, setTheme] = useState<Theme>(() => loadStr('sakura-theme', 'sakura') as Theme)
   const [sidebarWidth, setSidebarWidth] = useState(DEFAULT_SIDEBAR_WIDTH)
   const [showParticles, setShowParticles] = useState(() => loadBool('sakura-particles', true))
@@ -73,44 +116,65 @@ export default function App() {
   const sidebarRef = useRef<HTMLDivElement>(null)
   const dragging = useRef(false)
 
+  /* ── Entry ID Counter ── */
   const idCounter = useRef(0)
-  const entriesRef = useRef<TerminalEntry[]>([])
-  const rafRef = useRef<number>(0)
-  const pendingEntries = useRef<TerminalEntry[]>([])
 
-  // Keep entriesRef in sync
-  entriesRef.current = entries
-
-  // ── Sidebar resize ──
-  const onDragStart = useCallback((e: React.MouseEvent) => {
-    e.preventDefault()
-    dragging.current = true
-    const startX = e.clientX
-    const startWidth = sidebarRef.current?.offsetWidth ?? sidebarWidth
-
-    const onMove = (ev: MouseEvent) => {
-      const delta = ev.clientX - startX
-      const w = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, startWidth + delta))
-      setSidebarWidth(w)
-    }
-    const onUp = () => {
-      dragging.current = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
-    }
-    document.body.style.cursor = 'col-resize'
-    document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [sidebarWidth])
-
-  // ── Apply theme to document ──
+  /* ── Apply theme ── */
   useEffect(() => {
     document.documentElement.dataset.theme = theme
   }, [theme])
 
+  /* ── Status listener ── */
+  useEffect(() => {
+    const cleanup = window.deviceApi.onStatusChange((status, detail) => {
+      if (status === 'connected') {
+        setIsConnected(true)
+      } else if (status === 'disconnected') {
+        setIsConnected(false)
+        setDeviceName('')
+        setDeviceInfo(null)
+      } else if (status === 'error') {
+        addEntry({
+          timestamp: Date.now(),
+          direction: 'rx',
+          protocol: 'SYS',
+          summary: `Error: ${detail || 'Unknown error'}`,
+          data: '',
+        })
+      }
+    })
+    return cleanup
+  }, [])
+
+  /* ── Sidebar resize ── */
+  const onDragStart = useCallback(
+    (e: React.MouseEvent) => {
+      e.preventDefault()
+      dragging.current = true
+      const startX = e.clientX
+      const startWidth = sidebarRef.current?.offsetWidth ?? sidebarWidth
+
+      const onMove = (ev: MouseEvent) => {
+        const delta = ev.clientX - startX
+        const w = Math.min(MAX_SIDEBAR_WIDTH, Math.max(MIN_SIDEBAR_WIDTH, startWidth + delta))
+        setSidebarWidth(w)
+      }
+      const onUp = () => {
+        dragging.current = false
+        document.removeEventListener('mousemove', onMove)
+        document.removeEventListener('mouseup', onUp)
+        document.body.style.cursor = ''
+        document.body.style.userSelect = ''
+      }
+      document.body.style.cursor = 'col-resize'
+      document.body.style.userSelect = 'none'
+      document.addEventListener('mousemove', onMove)
+      document.addEventListener('mouseup', onUp)
+    },
+    [sidebarWidth]
+  )
+
+  /* ── Theme ── */
   const handleSetTheme = useCallback((th: Theme) => {
     setTheme(th)
     saveStr('sakura-theme', th)
@@ -120,179 +184,128 @@ export default function App() {
     setShowParticles(v)
     saveBool('sakura-particles', v)
   }, [])
+
   const handleToggleMascot = useCallback((v: boolean) => {
     setShowMascot(v)
     saveBool('sakura-mascot', v)
   }, [])
 
-  // ── Flush pending entries in batch via rAF ──
-  const flushPending = useCallback(() => {
-    if (pendingEntries.current.length === 0) return
-    setEntries((prev) => {
-      const next = [...prev, ...pendingEntries.current]
-      pendingEntries.current = []
-      return next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next
-    })
-  }, [])
-
-  // ── Add entry (batched) ──
-  const addEntry = useCallback((entry: Omit<TerminalEntry, 'id'>) => {
-    const newEntry = { ...entry, id: ++idCounter.current }
-    pendingEntries.current.push(newEntry)
-
-    if (entry.direction === 'tx') {
-      setTxCount((c) => c + 1)
-    } else {
-      setRxCount((c) => c + 1)
-    }
-
-    if (!rafRef.current) {
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = 0
-        flushPending()
+  /* ── Transaction Log ── */
+  const addEntry = useCallback(
+    (entry: Omit<TransactionEntry, 'id'>) => {
+      const newEntry = { ...entry, id: ++idCounter.current }
+      setEntries((prev) => {
+        const next = [...prev, newEntry]
+        return next.length > MAX_ENTRIES ? next.slice(next.length - MAX_ENTRIES) : next
       })
-    }
-  }, [flushPending])
+      if (entry.direction === 'tx') setTxCount((c) => c + 1)
+      else setRxCount((c) => c + 1)
+    },
+    []
+  )
 
-  // ── Serial Data Listener ──
-  useEffect(() => {
-    const cleanup = window.api.onSerialData((data: SerialData) => {
-      addEntry({
-        timestamp: data.timestamp,
-        direction: 'rx',
-        data: data.data,
-        hex: data.hex
-      })
-    })
-    return cleanup
-  }, [addEntry])
+  const handleLogTransaction = useCallback(
+    (entry: {
+      timestamp: number
+      direction: 'tx' | 'rx'
+      protocol: string
+      summary: string
+      data: string
+    }) => {
+      addEntry(entry)
+    },
+    [addEntry]
+  )
 
-  // ── Serial Error Listener ──
-  useEffect(() => {
-    const cleanup = window.api.onSerialError((error: string) => {
-      addEntry({
-        timestamp: Date.now(),
-        direction: 'rx',
-        data: t('serial.error', { error }),
-        hex: ''
-      })
-    })
-    return cleanup
-  }, [addEntry, t])
-
-  // ── Serial Status Listener ──
-  useEffect(() => {
-    const cleanup = window.api.onSerialStatus((status: string) => {
-      if (status === 'closed') {
-        setIsOpen(false)
-        setDtr(false)
-        setRts(false)
-      }
-    })
-    return cleanup
-  }, [])
-
-  // ── List Ports ──
-  const refreshPorts = useCallback(async () => {
-    const list = await window.api.listPorts()
-    setPorts(list)
-    return list
-  }, [])
-
-  // ── Initial port scan ──
-  useEffect(() => {
-    refreshPorts()
-    const interval = setInterval(refreshPorts, 3000)
-    return () => clearInterval(interval)
-  }, [refreshPorts])
-
-  // ── Open / Close ──
-  function parityLabelShort(p: string): string {
-    switch (p) { case 'none': return 'N'; case 'even': return 'E'; case 'odd': return 'O'; case 'mark': return 'M'; case 'space': return 'S'; default: return 'N' }
-  }
-
-  const handleOpen = useCallback(async () => {
-    if (!selectedPort) return
-    const config: SerialConfig = {
-      path: selectedPort,
-      baudRate,
-      dataBits,
-      stopBits,
-      parity,
-      flowControl
-    }
-    const result = await window.api.openPort(config)
-    if (result.success) {
-      setIsOpen(true)
-      addEntry({
-        timestamp: Date.now(),
-        direction: 'rx',
-        data: t('serial.opened', {
-          port: selectedPort,
-          baud: String(baudRate),
-          data: String(dataBits),
-          parity: parityLabelShort(parity),
-          stop: String(stopBits)
-        }),
-        hex: ''
-      })
-    } else {
-      addEntry({
-        timestamp: Date.now(),
-        direction: 'rx',
-        data: t('serial.openFailed', { error: result.error || '' }),
-        hex: ''
-      })
-    }
-  }, [selectedPort, baudRate, dataBits, stopBits, parity, flowControl, addEntry, t])
-
-  const handleClose = useCallback(async () => {
-    const result = await window.api.closePort()
-    if (result.success) {
-      setIsOpen(false)
-      setDtr(false)
-      setRts(false)
-      addEntry({
-        timestamp: Date.now(),
-        direction: 'rx',
-        data: t('serial.closed'),
-        hex: ''
-      })
-    }
-  }, [addEntry, t])
-
-  // ── Send Data ──
-  const handleSend = useCallback(async (data: string, isHex: boolean) => {
-    if (!isOpen || !data) return
-    const result = await window.api.writeData(data, isHex)
-    if (result.success) {
-      addEntry({
-        timestamp: Date.now(),
-        direction: 'tx',
-        data: isHex ? `[HEX] ${data}` : data,
-        hex: isHex ? data.replace(/\s/g, '') : ''
-      })
-    }
-  }, [isOpen, addEntry])
-
-  // ── DTR / RTS ──
-  const handleDtr = useCallback(async (state: boolean) => {
-    await window.api.setDtr(state)
-    setDtr(state)
-  }, [])
-
-  const handleRts = useCallback(async (state: boolean) => {
-    await window.api.setRts(state)
-    setRts(state)
-  }, [])
-
-  // ── Clear Terminal ──
-  const handleClear = useCallback(() => {
+  const handleClearLog = useCallback(() => {
     setEntries([])
     setTxCount(0)
     setRxCount(0)
     idCounter.current = 0
   }, [])
+
+  /* ── Export ── */
+  const handleExport = useCallback(
+    (format: 'csv' | 'json') => {
+      if (entries.length === 0) return
+
+      let content: string
+      let filename: string
+      const ts = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19)
+
+      if (format === 'csv') {
+        const header = 'timestamp,direction,protocol,summary,data'
+        const rows = entries.map(
+          (e) =>
+            `"${new Date(e.timestamp).toISOString()}","${e.direction}","${e.protocol}","${e.summary}","${e.data}"`
+        )
+        content = [header, ...rows].join('\n')
+        filename = `probe-station-log-${ts}.csv`
+      } else {
+        content = JSON.stringify(entries, null, 2)
+        filename = `probe-station-log-${ts}.json`
+      }
+
+      const blob = new Blob([content], { type: 'text/plain' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = filename
+      a.click()
+      URL.revokeObjectURL(url)
+    },
+    [entries]
+  )
+
+  /* ── Connection handlers ── */
+  const handleConnect = useCallback(
+    async (config: TransportConfig) => {
+      await window.deviceApi.connect(config)
+      setIsConnected(true)
+
+      // Try to get device info
+      try {
+        const info = await window.deviceApi.getDeviceInfo()
+        setDeviceName(info.firmwareVersion || info.deviceName || 'probe-station')
+        setDeviceInfo({
+          firmwareVersion: info.firmwareVersion || 'unknown',
+          supportedProtocols: info.supportedProtocols || [],
+          transportType: config.type.toUpperCase(),
+        })
+        addEntry({
+          timestamp: Date.now(),
+          direction: 'rx',
+          protocol: 'SYS',
+          summary: `Connected · FW: ${info.firmwareVersion} · Protocols: ${info.supportedProtocols.length}`,
+          data: '',
+        })
+      } catch {
+        setDeviceName('probe-station')
+        setDeviceInfo({ firmwareVersion: 'unknown', supportedProtocols: [], transportType: config.type.toUpperCase() })
+        addEntry({
+          timestamp: Date.now(),
+          direction: 'rx',
+          protocol: 'SYS',
+          summary: 'Connected',
+          data: '',
+        })
+      }
+    },
+    [addEntry]
+  )
+
+  const handleDisconnect = useCallback(async () => {
+    await window.deviceApi.disconnect()
+    setIsConnected(false)
+    setDeviceName('')
+    addEntry({
+      timestamp: Date.now(),
+      direction: 'rx',
+      protocol: 'SYS',
+      summary: 'Disconnected',
+      data: '',
+    })
+  }, [addEntry])
 
   return (
     <div className="app-container">
@@ -301,8 +314,8 @@ export default function App() {
       {/* Title Bar */}
       <div className="title-bar">
         <div className="title-bar__left">
-          <span className="title-bar__icon">🌸</span>
-          <span className="title-bar__text">{t('app.title')}</span>
+          <span className="title-bar__icon">⚡</span>
+          <span className="title-bar__text">probe-station</span>
         </div>
         <div className="title-bar__controls">
           <SettingsButton
@@ -313,79 +326,125 @@ export default function App() {
             onToggleParticles={handleToggleParticles}
             onToggleMascot={handleToggleMascot}
           />
-          <button className="title-bar__btn" onClick={() => window.api.minimizeWindow()}
-            title={t('win.minimize')}>─</button>
-          <button className="title-bar__btn" onClick={() => window.api.maximizeWindow()}
-            title={t('win.maximize')}>□</button>
-          <button className="title-bar__btn title-bar__btn--close"
-            onClick={() => window.api.closeWindow()} title={t('win.close')}>✕</button>
+          <button
+            className="title-bar__btn"
+            onClick={() => window.deviceApi.minimizeWindow()}
+            title="Minimize"
+          >
+            ─
+          </button>
+          <button
+            className="title-bar__btn"
+            onClick={() => window.deviceApi.maximizeWindow()}
+            title="Maximize"
+          >
+            □
+          </button>
+          <button
+            className="title-bar__btn title-bar__btn--close"
+            onClick={() => window.deviceApi.closeWindow()}
+            title="Close"
+          >
+            ✕
+          </button>
         </div>
       </div>
 
       {/* Main Content */}
       <div className="main-content">
+        {/* Sidebar — Connection Manager */}
         <div className="port-config-sidebar" ref={sidebarRef} style={{ width: sidebarWidth }}>
-          <PortConfig
-            ports={ports}
-            selectedPort={selectedPort}
-            onSelectPort={setSelectedPort}
-            baudRate={baudRate}
-            onBaudRateChange={setBaudRate}
-            dataBits={dataBits}
-            onDataBitsChange={setDataBits}
-            stopBits={stopBits}
-            onStopBitsChange={setStopBits}
-            parity={parity}
-            onParityChange={setParity}
-            flowControl={flowControl}
-            onFlowControlChange={setFlowControl}
-            isOpen={isOpen}
-            onOpen={handleOpen}
-            onClose={handleClose}
-            onRefresh={refreshPorts}
-            dtr={dtr}
-            rts={rts}
-            onDtrChange={handleDtr}
-            onRtsChange={handleRts}
+          <ConnectionManager
+            isConnected={isConnected}
+            deviceName={deviceName}
+            deviceInfo={deviceInfo}
+            onConnect={handleConnect}
+            onDisconnect={handleDisconnect}
           />
         </div>
 
         {/* Resize Handle */}
         <div className="sidebar-resize-handle" onMouseDown={onDragStart} />
 
+        {/* Protocol Panel Area */}
         <div className="terminal-panel">
-          <Terminal
+          {/* Tab Bar */}
+          <div className="protocol-tabs">
+            {TABS.map((tab) => (
+              <button
+                key={tab.key}
+                className={`protocol-tab ${activeTab === tab.key ? 'protocol-tab--active' : ''}`}
+                onClick={() => setActiveTab(tab.key)}
+                title={tab.label}
+              >
+                <span className="protocol-tab__icon">{tab.icon}</span>
+                <span className="protocol-tab__label">{tab.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Active Panel */}
+          <div className="protocol-panel-area">
+            {activeTab === 'i2c' && (
+              <I2CPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'spi' && (
+              <SPIPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'uart' && (
+              <UARTPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'can' && (
+              <CANPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'onewire' && (
+              <OneWirePanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'gpio' && (
+              <GPIOPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'la' && (
+              <LAPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+            {activeTab === 'script' && (
+              <ScriptPanel isConnected={isConnected} onTransaction={handleLogTransaction} />
+            )}
+          </div>
+
+          {/* Transaction Log */}
+          <TransactionLog
             entries={entries}
-            showHex={showHex}
             showTimestamp={showTimestamp}
             autoScroll={autoScroll}
-            onToggleHex={() => setShowHex((v) => !v)}
             onToggleTimestamp={() => setShowTimestamp((v) => !v)}
             onToggleAutoScroll={() => setAutoScroll((v) => !v)}
-            onClear={handleClear}
-          />
-
-          <SendPanel
-            isOpen={isOpen}
-            onSend={handleSend}
+            onClear={handleClearLog}
+            onExport={handleExport}
           />
         </div>
       </div>
 
       {/* Status Bar */}
-      <StatusBar
-        isOpen={isOpen}
-        selectedPort={selectedPort}
-        baudRate={baudRate}
-        dataBits={dataBits}
-        stopBits={stopBits}
-        parity={parity}
-        txCount={txCount}
-        rxCount={rxCount}
-      />
+      <div className="status-bar">
+        <span className={`status-bar__dot ${isConnected ? 'status-bar__dot--connected' : ''}`} />
+        <span className="status-bar__text">
+          {isConnected
+            ? `Connected (${deviceName || 'probe-station'})`
+            : 'Disconnected'}
+        </span>
+        <span className="status-bar__spacer" />
+        <span className="status-bar__stat">TX: {txCount}</span>
+        <span className="status-bar__stat">RX: {rxCount}</span>
+      </div>
 
       {/* Mascot */}
-      {showMascot && <Mascot isConnected={isOpen} sidebarWidth={sidebarWidth} onDismiss={() => handleToggleMascot(false)} />}
+      {showMascot && (
+        <Mascot
+          isConnected={isConnected}
+          sidebarWidth={sidebarWidth}
+          onDismiss={() => handleToggleMascot(false)}
+        />
+      )}
     </div>
   )
 }

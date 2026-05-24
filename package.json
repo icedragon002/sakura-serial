@@ -1,7 +1,7 @@
 {
   "name": "sakura-serial",
-  "version": "1.1.0",
-  "description": "🌸 Sakura Serial - 二次元风格跨平台串口调试工具",
+  "version": "2.0.0",
+  "description": "⚡ probe-station Desktop — Universal Protocol Debugger (I2C/SPI/UART/CAN/1-Wire/GPIO/LA)",
   "main": "./out/main/index.js",
   "author": "icedragon002",
   "license": "MIT",
@@ -14,6 +14,7 @@
     "postinstall": "electron-builder install-app-deps"
   },
   "dependencies": {
+    "@monaco-editor/react": "^4.7.0",
     "serialport": "^12.0.0"
   },
   "devDependencies": {
